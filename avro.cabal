@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 307ace222c16e9660fc8fd8f1d3b126a4254daea39bb616b93782a86b81d73b0
+-- hash: 4b4781516811d9384e47a7101170fbd57a66a37687e688b7f75029316dd487b1
 
 name:           avro
 version:        0.3.4.3
@@ -130,6 +130,7 @@ test-suite test
       Avro.EncodeRawSpec
       Avro.JSONSpec
       Avro.NormSchemaSpec
+      Avro.SchemaSpec
       Avro.THEncodeContainerSpec
       Avro.THEnumSpec
       Avro.THLogicalTypeSpec
@@ -137,7 +138,6 @@ test-suite test
       Avro.THSimpleSpec
       Avro.THUnionSpec
       Avro.ToAvroSpec
-      Avro.SchemaSpec
       DecodeContainer
       Example1
       Paths_avro
