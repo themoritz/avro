@@ -2,29 +2,35 @@ name: Multi GHC Build
 on: [push]
 jobs:
   build:
-      runs-on: ubuntu-latest
+    name: GHC ${{ matrix.ghc }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
 
-      strategy:
-        matrix:
-          ghc: [ '8.4.4', '8.6.5' ]
-          cabal: [ '2.4', '3.0' ]
-      name: Haskell GHC ${{ matrix.ghc }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+        ghc: [ '8.4.4', '8.6.5' ]
+        cabal: [ '2.4' ]
 
-      steps:
-        - uses: actions/checkout@master
-        - uses: actions/setup-haskell@v1
-          with:
-            ghc-version: ${{ matrix.ghc }}
-            cabal-version: ${{ matrix.cabal }}
+    steps:
+      - uses: actions/checkout@master
+      - uses: actions/setup-haskell@v1
+        with:
+          ghc-version: ${{ matrix.ghc }}
+          cabal-version: ${{ matrix.cabal }}
 
-        - name: Install dependencies
-          run: |
-            cabal v2-update
+      - run: jq --version
 
-        - name: Build
-          run: |
-            cabal v2-build
+      - name: Cabal check
+        run: cabal check
 
-        - name: Test
-          run: |
-            cabal v2-test
+      - name: Install dependencies
+        run: |
+          cabal v2-update
+
+      - name: Build
+        run: |
+          cabal v2-build
+
+      - name: Test
+        run: |
+          cabal v2-test
