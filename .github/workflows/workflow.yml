@@ -10,7 +10,7 @@ jobs:
         # os: [ubuntu-latest, windows-latest, macOS-latest]
         os: [ macOS-latest]
         ghc: [ '8.6.5' ]
-        cabal: [ '2.4' ]
+        cabal: [ '2.4.1.0' ]
 
     steps:
       - uses: actions/checkout@master
