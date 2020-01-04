@@ -165,7 +165,7 @@ getContainerValues = getContainerValuesWith getAvroOf
 -- (including problems like reading schemas embedded into the container.)
 decodeRawBlocks :: BL.ByteString -> Either String (Schema, [Either String (Int, BL.ByteString)])
 decodeRawBlocks bs =
-  case runGetOrFail getAvro bs of
+  case runGetOrFail (getAvro S.Bytes) bs of
     Left (bs', _, err) -> Left err
     Right (bs', _, ContainerHeader {..}) ->
       let blocks = allBlocks syncBytes decompress bs'
@@ -227,9 +227,9 @@ getContainerValuesWith schemaToGet bs =
         let (_, vs) = consumeN (fromIntegral nObj) getValue bytes
         in vs
 
-decodeGet :: GetAvro a => (a -> T.LazyValue Schema) -> BL.ByteString -> (BL.ByteString, T.LazyValue Schema)
-decodeGet f bs =
-  let res = runGetOrFail (f <$> getAvro) bs
+decodeGet :: GetAvro a => Schema -> (a -> T.LazyValue Schema) -> BL.ByteString -> (BL.ByteString, T.LazyValue Schema)
+decodeGet s f bs =
+  let res = runGetOrFail (f <$> getAvro s) bs
   in either (\(rest,_,s) -> (rest, T.Error s)) (\(rest,_,a) -> (rest, a)) res
 {-# INLINE decodeGet #-}
 
@@ -297,13 +297,13 @@ getAvroOf ty0 bs = go ty0 bs
   go ty bs =
     case ty of
       Null    -> (bs, T.Null)
-      Boolean -> decodeGet T.Boolean  bs
-      Int     -> decodeGet T.Int      bs
-      Long    -> decodeGet T.Long     bs
-      Float   -> decodeGet T.Float    bs
-      Double  -> decodeGet T.Double   bs
-      Bytes   -> decodeGet T.Bytes    bs
-      String  -> decodeGet T.String   bs
+      Boolean -> decodeGet ty T.Boolean  bs
+      Int     -> decodeGet ty T.Int      bs
+      Long    -> decodeGet ty T.Long     bs
+      Float   -> decodeGet ty T.Float    bs
+      Double  -> decodeGet ty T.Double   bs
+      Bytes   -> decodeGet ty T.Bytes    bs
+      String  -> decodeGet ty T.String   bs
       Array t -> T.Array . V.fromList . mconcat <$> getElements bs (go t)
       Map t   -> T.Map . HashMap.fromList . mconcat <$> getKVPairs bs (go t)
       NamedType tn ->
@@ -336,12 +336,12 @@ getAvroOf ty0 bs = go ty0 bs
           Left (bs', _, err) -> (bs', T.Error err)
           Right (bs', _, v)  -> (bs', T.Fixed ty v)
 
-      IntLongCoercion     -> decodeGet @Int32 (T.Long   . fromIntegral) bs
-      IntFloatCoercion    -> decodeGet @Int32 (T.Float  . fromIntegral) bs
-      IntDoubleCoercion   -> decodeGet @Int32 (T.Double . fromIntegral) bs
-      LongFloatCoercion   -> decodeGet @Int64 (T.Float  . fromIntegral) bs
-      LongDoubleCoercion  -> decodeGet @Int64 (T.Double . fromIntegral) bs
-      FloatDoubleCoercion -> decodeGet @Float (T.Double . realToFrac)   bs
+      IntLongCoercion     -> decodeGet @Int32 S.Int (T.Long     . fromIntegral) bs
+      IntFloatCoercion    -> decodeGet @Int32 S.Int (T.Float    . fromIntegral) bs
+      IntDoubleCoercion   -> decodeGet @Int32 S.Int (T.Double   . fromIntegral) bs
+      LongFloatCoercion   -> decodeGet @Int64 S.Long (T.Float   . fromIntegral) bs
+      LongDoubleCoercion  -> decodeGet @Int64 S.Long (T.Double  . fromIntegral) bs
+      FloatDoubleCoercion -> decodeGet @Float S.Float (T.Double . realToFrac)   bs
       FreeUnion {..} -> T.Union (V.singleton ty) ty <$> go ty bs
 
   getField :: Field -> BL.ByteString -> (BL.ByteString, Maybe (Text, T.LazyValue Schema))

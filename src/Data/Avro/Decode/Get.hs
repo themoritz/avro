@@ -38,46 +38,77 @@ import Data.Avro.DecodeRaw
 import Data.Avro.Schema    as S
 
 class GetAvro a where
-  getAvro :: Get a
+  getAvro :: Schema -> Get a
 
 instance GetAvro ty => GetAvro (Map.Map Text ty) where
-  getAvro = getMap
+  getAvro (S.Map s) = getMap s
+  getAvro s = fail $ "Unable to read as Map: " <> show s
+
 instance GetAvro Bool where
-  getAvro = getBoolean
+  getAvro S.Boolean = getBoolean
+  getAvro s = fail $ "Unable to read as Boolean: " <> show s
+
 instance GetAvro Int32 where
-  getAvro = getInt
+  getAvro S.Int = getInt
+  getAvro s = fail $ "Unable to read as Int: " <> show s
+
 instance GetAvro Int64 where
-  getAvro = getLong
+  getAvro S.Long = getLong
+  getAvro S.Int  = fromIntegral <$> getInt
+  getAvro s = fail $ "Unable to read as Long: " <> show s
+
 instance GetAvro BL.ByteString where
-  getAvro = BL.fromStrict <$> getBytes
+  getAvro _ = BL.fromStrict <$> getBytes
+
 instance GetAvro ByteString where
-  getAvro = getBytes
+  getAvro _ = getBytes
+
 instance GetAvro Text where
-  getAvro = getString
+  getAvro S.String = getString
+  getAvro S.Bytes  = getString
+  getAvro s = fail $ "Unable to read as Text: " <> show s
+
 instance GetAvro Float where
-  getAvro = getFloat
+  getAvro S.Float = getFloat
+  getAvro S.Int   = fromIntegral <$> getInt
+  getAvro s = fail $ "Unable to read as Float: " <> show s
+
 instance GetAvro Double where
-  getAvro = getDouble
+  getAvro S.Double = getDouble
+  getAvro S.Float  = realToFrac <$> getFloat
+  getAvro S.Int    = fromIntegral <$> getInt
+  getAvro S.Long   = fromIntegral <$> getLong
+
 instance GetAvro String where
-  getAvro = Text.unpack <$> getString
+  getAvro S.String = Text.unpack <$> getString
+  getAvro S.Bytes  = Text.unpack <$> getString
+
 instance GetAvro a => GetAvro [a] where
-  getAvro = getArray
+  getAvro (S.Array s) = getArray s
+  getAvro s = fail $ "Unable to read as Array: " <> show s
+
 instance GetAvro a => GetAvro (Maybe a) where
-  getAvro =
-    do t <- getLong
-       case t of
-        0 -> return Nothing
-        1 -> Just <$> getAvro
-        n -> fail $ "Invalid tag for expected {null,a} Avro union, received: " <> show n
+  getAvro (S.Union ss) = 
+    if V.length ss == 2 && V.unsafeHead ss == S.Null 
+      then do
+        t <- getLong
+        case t of
+          0 -> return Nothing
+          1 -> Just <$> getAvro (V.unsafeIndex ss 1)
+          n -> fail $ "Invalid tag for expected {null,a} Avro union, received: " <> show n
+      else fail $ "Unable to read Maybe, expected {null, a}: " <> show ss
+  getAvro s = fail $ "Unable to read Maybe: " <> show s
 
 instance GetAvro a => GetAvro (Array.Array Int a) where
-  getAvro =
-    do ls <- getAvro
+  getAvro valueSchema =
+    do ls <- getAvro valueSchema
        return $ Array.listArray (0,length ls - 1) ls
+
 instance GetAvro a => GetAvro (V.Vector a) where
-  getAvro = V.fromList <$> getAvro
+  getAvro s = V.fromList <$> getAvro s
+
 instance (GetAvro a, Ord a) => GetAvro (Set.Set a) where
-  getAvro = Set.fromList <$> getAvro
+  getAvro s = Set.fromList <$> getAvro s
 
 
 data ContainerHeader = ContainerHeader
@@ -90,11 +121,11 @@ nrSyncBytes :: Integral sb => sb
 nrSyncBytes = 16
 
 instance GetAvro ContainerHeader where
-  getAvro =
+  getAvro _ =
    do magic <- getFixed avroMagicSize
       when (BL.fromStrict magic /= avroMagicBytes)
            (fail "Invalid magic number at start of container.")
-      metadata <- getMap :: Get (Map.Map Text BL.ByteString) -- avro.schema, avro.codec
+      metadata <- getMap S.Bytes :: Get (Map.Map Text BL.ByteString) -- avro.schema, avro.codec
       sync  <- BL.fromStrict <$> getFixed nrSyncBytes
       codec <- getCodec (Map.lookup "avro.codec" metadata)
       schema <- case Map.lookup "avro.schema" metadata of
@@ -195,12 +226,12 @@ getDouble = IEEE.wordToDouble <$> G.getWord64le
 -- getRecord :: GetAvro ty => Get (AvroValue ty)
 -- getRecord = getAvro
 
-getArray :: GetAvro ty => Get [ty]
-getArray = decodeBlocks getAvro
+getArray :: GetAvro ty => Schema -> Get [ty]
+getArray itemSchema = decodeBlocks (getAvro itemSchema)
 
-getMap :: GetAvro ty => Get (Map.Map Text ty)
-getMap = Map.fromList <$> decodeBlocks keyValue
-  where keyValue = (,) <$> getString <*> getAvro
+getMap :: GetAvro ty => Schema -> Get (Map.Map Text ty)
+getMap valueSchema = Map.fromList <$> decodeBlocks keyValue
+  where keyValue = (,) <$> getString <*> getAvro valueSchema
 
 -- | Avro encodes arrays and maps as a series of blocks. Each block
 -- starts with a count of the elements in the block. A series of

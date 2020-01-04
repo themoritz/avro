@@ -79,7 +79,7 @@ decodeContainerWith schemaToGet bs =
 
 getContainerWith :: (Schema -> Get a) -> Get (Schema, [[a]])
 getContainerWith schemaToGet =
-   do ContainerHeader {..} <- getAvro
+   do ContainerHeader {..} <- getAvro S.Bytes
       (containedSchema,) <$> getBlocks (schemaToGet containedSchema) syncBytes decompress
   where
   getBlocks :: Get a -> BL.ByteString -> (forall x. Decompress x) -> Get [[a]]

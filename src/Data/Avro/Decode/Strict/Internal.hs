@@ -50,13 +50,13 @@ getAvroOf ty0 = go ty0
  go ty =
   case ty of
     Null    -> return T.Null
-    Boolean -> T.Boolean <$> getAvro
-    Int     -> T.Int     <$> getAvro
-    Long    -> T.Long    <$> getAvro
-    Float   -> T.Float   <$> getAvro
-    Double  -> T.Double  <$> getAvro
-    Bytes   -> T.Bytes   <$> getAvro
-    String  -> T.String  <$> getAvro
+    Boolean -> T.Boolean <$> getAvro ty
+    Int     -> T.Int     <$> getAvro ty
+    Long    -> T.Long    <$> getAvro ty
+    Float   -> T.Float   <$> getAvro ty
+    Double  -> T.Double  <$> getAvro ty
+    Bytes   -> T.Bytes   <$> getAvro ty
+    String  -> T.String  <$> getAvro ty
     Array t ->
       do vals <- getBlocksOf t
          return $ T.Array (V.fromList $ mconcat vals)
@@ -76,12 +76,12 @@ getAvroOf ty0 = go ty0
           Nothing -> fail $ "Decoded Avro tag is outside the expected range for a Union. Tag: " <> show i <> " union of: " <> show (V.map typeName ts)
           Just t  -> T.Union ts t <$> go t
     Fixed {..} -> T.Fixed ty <$> G.getByteString (fromIntegral size)
-    IntLongCoercion     -> T.Long   . fromIntegral <$> getAvro @Int32
-    IntFloatCoercion    -> T.Float  . fromIntegral <$> getAvro @Int32
-    IntDoubleCoercion   -> T.Double . fromIntegral <$> getAvro @Int32
-    LongFloatCoercion   -> T.Float  . fromIntegral <$> getAvro @Int64
-    LongDoubleCoercion  -> T.Double . fromIntegral <$> getAvro @Int64
-    FloatDoubleCoercion -> T.Double . realToFrac   <$> getAvro @Float
+    IntLongCoercion     -> T.Long   . fromIntegral <$> getAvro @Int32 S.Int
+    IntFloatCoercion    -> T.Float  . fromIntegral <$> getAvro @Int32 S.Int
+    IntDoubleCoercion   -> T.Double . fromIntegral <$> getAvro @Int32 S.Int
+    LongFloatCoercion   -> T.Float  . fromIntegral <$> getAvro @Int64 S.Long
+    LongDoubleCoercion  -> T.Double . fromIntegral <$> getAvro @Int64 S.Long
+    FloatDoubleCoercion -> T.Double . realToFrac   <$> getAvro @Float S.Float
     FreeUnion ty -> T.Union (V.singleton ty) ty <$> go ty
 
  getField :: Field -> Get (Maybe (Text, T.Value Schema))
