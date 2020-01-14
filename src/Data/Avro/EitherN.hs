@@ -10,6 +10,8 @@ import           Data.Avro
 import           Data.Avro.Decode.Lazy as AL
 import           Data.Avro.Schema
 import qualified Data.Avro.Types       as T
+import           Data.Avro.Value       (FromValue (..))
+import qualified Data.Avro.Value       as AV
 import           Data.Bifoldable       (Bifoldable (..))
 import           Data.Bifunctor        (Bifunctor (..))
 import           Data.Bitraversable    (Bitraversable (..))
@@ -166,15 +168,15 @@ instance Bifunctor (Either9 a b c d e f g) where
   bimap _ g (E9_9 a) = E9_9 (g a)
 
 instance Bifunctor (Either10 a b c d e f g h) where
-  bimap _ _ (E10_1 a) = E10_1 a
-  bimap _ _ (E10_2 a) = E10_2 a
-  bimap _ _ (E10_3 a) = E10_3 a
-  bimap _ _ (E10_4 a) = E10_4 a
-  bimap _ _ (E10_5 a) = E10_5 a
-  bimap _ _ (E10_6 a) = E10_6 a
-  bimap _ _ (E10_7 a) = E10_7 a
-  bimap _ _ (E10_8 a) = E10_8 a
-  bimap f _ (E10_9 a) = E10_9 (f a)
+  bimap _ _ (E10_1 a)  = E10_1 a
+  bimap _ _ (E10_2 a)  = E10_2 a
+  bimap _ _ (E10_3 a)  = E10_3 a
+  bimap _ _ (E10_4 a)  = E10_4 a
+  bimap _ _ (E10_5 a)  = E10_5 a
+  bimap _ _ (E10_6 a)  = E10_6 a
+  bimap _ _ (E10_7 a)  = E10_7 a
+  bimap _ _ (E10_8 a)  = E10_8 a
+  bimap f _ (E10_9 a)  = E10_9 (f a)
   bimap _ g (E10_10 a) = E10_10 (g a)
 
 instance Monad (Either3 a b) where
@@ -281,9 +283,9 @@ instance Bifoldable (Either9 a b c d e f g) where
   bifoldMap _ _ _        = mempty
 
 instance Bifoldable (Either10 a b c d e f g h) where
-  bifoldMap f _ (E10_9 a) = f a
+  bifoldMap f _ (E10_9 a)  = f a
   bifoldMap _ g (E10_10 a) = g a
-  bifoldMap _ _ _        = mempty
+  bifoldMap _ _ _          = mempty
 
 instance Bitraversable (Either3 a) where
   bitraverse _ _ (E3_1 a) = pure (E3_1 a)
@@ -342,15 +344,15 @@ instance Bitraversable (Either9 a b c d e f g) where
   bitraverse _ g (E9_9 a) = E9_9 <$> (g a)
 
 instance Bitraversable (Either10 a b c d e f g h) where
-  bitraverse _ _ (E10_1 a) = pure (E10_1 a)
-  bitraverse _ _ (E10_2 a) = pure (E10_2 a)
-  bitraverse _ _ (E10_3 a) = pure (E10_3 a)
-  bitraverse _ _ (E10_4 a) = pure (E10_4 a)
-  bitraverse _ _ (E10_5 a) = pure (E10_5 a)
-  bitraverse _ _ (E10_6 a) = pure (E10_6 a)
-  bitraverse _ _ (E10_7 a) = pure (E10_7 a)
-  bitraverse _ _ (E10_8 a) = pure (E10_8 a)
-  bitraverse f _ (E10_9 a) = E10_9 <$> (f a)
+  bitraverse _ _ (E10_1 a)  = pure (E10_1 a)
+  bitraverse _ _ (E10_2 a)  = pure (E10_2 a)
+  bitraverse _ _ (E10_3 a)  = pure (E10_3 a)
+  bitraverse _ _ (E10_4 a)  = pure (E10_4 a)
+  bitraverse _ _ (E10_5 a)  = pure (E10_5 a)
+  bitraverse _ _ (E10_6 a)  = pure (E10_6 a)
+  bitraverse _ _ (E10_7 a)  = pure (E10_7 a)
+  bitraverse _ _ (E10_8 a)  = pure (E10_8 a)
+  bitraverse f _ (E10_9 a)  = E10_9 <$> (f a)
   bitraverse _ g (E10_10 a) = E10_10 <$> (g a)
 
 instance (HasAvroSchema a, HasAvroSchema b, HasAvroSchema c) => HasAvroSchema (Either3 a b c) where
@@ -804,13 +806,35 @@ instance (ToAvro a, ToAvro b, ToAvro c, ToAvro d, ToAvro e, ToAvro f, ToAvro g, 
   toAvro e =
     let sch = options (schemaOf e)
     in case e of
-      E10_1 a -> T.Union sch (schemaOf a) (toAvro a)
-      E10_2 b -> T.Union sch (schemaOf b) (toAvro b)
-      E10_3 c -> T.Union sch (schemaOf c) (toAvro c)
-      E10_4 d -> T.Union sch (schemaOf d) (toAvro d)
-      E10_5 e -> T.Union sch (schemaOf e) (toAvro e)
-      E10_6 f -> T.Union sch (schemaOf f) (toAvro f)
-      E10_7 g -> T.Union sch (schemaOf g) (toAvro g)
-      E10_8 h -> T.Union sch (schemaOf h) (toAvro h)
-      E10_9 i -> T.Union sch (schemaOf i) (toAvro i)
+      E10_1 a  -> T.Union sch (schemaOf a) (toAvro a)
+      E10_2 b  -> T.Union sch (schemaOf b) (toAvro b)
+      E10_3 c  -> T.Union sch (schemaOf c) (toAvro c)
+      E10_4 d  -> T.Union sch (schemaOf d) (toAvro d)
+      E10_5 e  -> T.Union sch (schemaOf e) (toAvro e)
+      E10_6 f  -> T.Union sch (schemaOf f) (toAvro f)
+      E10_7 g  -> T.Union sch (schemaOf g) (toAvro g)
+      E10_8 h  -> T.Union sch (schemaOf h) (toAvro h)
+      E10_9 i  -> T.Union sch (schemaOf i) (toAvro i)
       E10_10 j -> T.Union sch (schemaOf j) (toAvro j)
+
+------------ DATA.AVRO.VALUE --------------------------------
+instance (FromValue a, FromValue b, FromValue c) => FromValue (Either3 a b c) where
+  fromValue (AV.Union 0 a) = E3_1 <$> fromValue a
+  fromValue (AV.Union 1 b) = E3_2 <$> fromValue b
+  fromValue (AV.Union 2 c) = E3_3 <$> fromValue c
+  fromValue (AV.Union n _) = Left ("Unable to decode Either3 from a position #" <> show n)
+
+instance (FromValue a, FromValue b, FromValue c, FromValue d) => FromValue (Either4 a b c d) where
+  fromValue (AV.Union 0 a) = E4_1 <$> fromValue a
+  fromValue (AV.Union 1 b) = E4_2 <$> fromValue b
+  fromValue (AV.Union 2 c) = E4_3 <$> fromValue c
+  fromValue (AV.Union 3 d) = E4_4 <$> fromValue d
+  fromValue (AV.Union n _) = Left ("Unable to decode Either4 from a position #" <> show n)
+
+instance (FromValue a, FromValue b, FromValue c, FromValue d, FromValue e) => FromValue (Either5 a b c d e) where
+  fromValue (AV.Union 0 a) = E5_1 <$> fromValue a
+  fromValue (AV.Union 1 b) = E5_2 <$> fromValue b
+  fromValue (AV.Union 2 c) = E5_3 <$> fromValue c
+  fromValue (AV.Union 3 d) = E5_4 <$> fromValue d
+  fromValue (AV.Union 4 e) = E5_5 <$> fromValue e
+  fromValue (AV.Union n _) = Left ("Unable to decode Either5 from a position #" <> show n)

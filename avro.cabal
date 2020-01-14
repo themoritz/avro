@@ -132,6 +132,7 @@ library
                         Data.Avro.Decode.Lazy.LazyValue
                         Data.Avro.Decode.Strict
                         Data.Avro.Decode.Strict.Internal
+                        Data.Avro.Decode.Value
                         Data.Avro.DecodeRaw
                         Data.Avro.Deconflict
                         Data.Avro.Deriving
@@ -149,6 +150,7 @@ library
                         Data.Avro.Types
                         Data.Avro.Types.Decimal
                         Data.Avro.Types.Value
+                        Data.Avro.Value
                         Data.Avro.Zag
                         Data.Avro.Zig
   other-modules:        Data.Avro.Types.Time
