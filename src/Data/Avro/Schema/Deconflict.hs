@@ -62,8 +62,8 @@ deconflict (S.Union xs) (S.Union ys) =
   let err x = "Incorrect payload: union " <> (show . Foldable.toList $ typeName <$> ys) <> " does not contain schema " <> Text.unpack (typeName x)
   in S.Union <$> V.mapM (\x -> maybe (Left $ err x) (deconflict x) (findType x ys)) xs
 deconflict nonUnion (S.Union ys)
-  | Just y <- findType nonUnion ys =
-    S.FreeUnion <$> deconflict nonUnion y
+  | Just (ix, y) <- findTypeV nonUnion ys =
+    S.FreeUnion ix <$> deconflict nonUnion y
 deconflict from (S.Int l) | isIntIn from = pure (S.Int l)
 deconflict from to | isIntIn   from && isLongOut   to = pure S.IntLongCoercion
 deconflict from to | isIntIn   from && isFloatOut  to = pure S.IntFloatCoercion
@@ -76,8 +76,8 @@ deconflict from to | isFloatIn from && isDoubleOut to = pure S.FloatDoubleCoerci
 deconflict S.Double to | isDoubleOut to = pure S.Double
 deconflict (S.Bytes _)  (S.String l) = pure (S.String l)  -- These are free coercions
 deconflict (S.String _) (S.Bytes l)  = pure (S.Bytes l)   -- These are free coercions
-deconflict (S.FreeUnion a) b = deconflict a b -- Free unions are free to discard
-deconflict a (S.FreeUnion b) = deconflict a b -- Free unions are free to discard
+deconflict (S.FreeUnion _ a) b = deconflict a b -- Free unions are free to discard
+deconflict a (S.FreeUnion _ b) = deconflict a b -- Free unions are free to discard
 deconflict a b = Left $ "Can not resolve differing writer and reader schemas: " ++ show (a, b)
 
 isIntIn :: Schema -> Bool
@@ -165,3 +165,12 @@ findType :: Foldable f => Schema -> f Schema -> Maybe Schema
 findType schema =
   let tn = typeName schema
   in Foldable.find ((tn ==) . typeName) -- TODO: Consider aliases
+
+-- replaceUnionType :: Vector Schema -> Schema -> (Schema -> Either String Schema) -> Either String (Vector Schema)
+-- replaceUnionType schemas toFind update =
+
+findTypeV :: Schema -> Vector Schema -> Maybe (Int, Schema)
+findTypeV schema schemas =
+  let tn = typeName schema
+  in case V.findIndex ((tn ==) . typeName) schemas of
+      Just ix -> Just (ix, V.unsafeIndex schemas ix)

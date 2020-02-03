@@ -133,7 +133,7 @@ data Schema
       | LongFloatCoercion
       | LongDoubleCoercion
       | FloatDoubleCoercion
-      | FreeUnion { ty :: Type }
+      | FreeUnion { pos :: Int, ty :: Type }
     deriving (Ord, Show, Generic, NFData)
 
 pattern Int'    = Int    Nothing
@@ -193,7 +193,7 @@ instance Eq Schema where
   LongFloatCoercion   == LongFloatCoercion   = True
   LongDoubleCoercion  == LongDoubleCoercion  = True
   FloatDoubleCoercion == FloatDoubleCoercion = True
-  FreeUnion ty1 == FreeUnion ty2 = ty1 == ty2
+  FreeUnion _ ty1 == FreeUnion _ ty2 = ty1 == ty2
 
   _ == _ = False
 

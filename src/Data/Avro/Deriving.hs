@@ -33,27 +33,28 @@ module Data.Avro.Deriving
 )
 where
 
-import           Control.Monad          (join)
-import           Control.Monad.Identity (Identity)
-import           Data.Aeson             (eitherDecode)
-import qualified Data.Aeson             as J
-import           Data.Avro              hiding (decode, encode)
-import           Data.Avro.Schema       as S
-import qualified Data.Avro.Types        as AT
-import           Data.ByteString        (ByteString)
-import qualified Data.ByteString        as B
-import           Data.Char              (isAlphaNum)
+import           Control.Monad                 (join)
+import           Control.Monad.Identity        (Identity)
+import           Data.Aeson                    (eitherDecode)
+import qualified Data.Aeson                    as J
+import           Data.Avro                     hiding (decode, encode)
+import           Data.Avro.Encoding.ToEncoding (ToEncoding (..), putI)
+import           Data.Avro.Schema              as S
+import qualified Data.Avro.Types               as AT
+import           Data.ByteString               (ByteString)
+import qualified Data.ByteString               as B
+import           Data.Char                     (isAlphaNum)
 import           Data.Int
-import           Data.List.NonEmpty (NonEmpty ((:|)))
-import qualified Data.List.NonEmpty as NE
-import           Data.Map           (Map)
-import           Data.Maybe         (fromMaybe)
-import           Data.Semigroup     ((<>))
-import qualified Data.Text          as Text
-import           Data.Time          (Day, DiffTime)
-import           Data.UUID          (UUID)
+import           Data.List.NonEmpty            (NonEmpty ((:|)))
+import qualified Data.List.NonEmpty            as NE
+import           Data.Map                      (Map)
+import           Data.Maybe                    (fromMaybe)
+import           Data.Semigroup                ((<>))
+import qualified Data.Text                     as Text
+import           Data.Time                     (Day, DiffTime)
+import           Data.UUID                     (UUID)
 
-import qualified Data.Avro.Value as AV
+import qualified Data.Avro.Encoding.Value as AV
 
 import GHC.Generics (Generic)
 
@@ -245,9 +246,10 @@ deriveAvroWithOptions' o s = do
   hasSchema <- traverse (genHasAvroSchema $ namespaceBehavior o) schemas
   fromAvros <- traverse (genFromAvro $ namespaceBehavior o) schemas
   fromLazyAvros <- traverse (genFromLazyAvro $ namespaceBehavior o) schemas
-  fromValues <- traverse (genFromAvroNew $ namespaceBehavior o) schemas
+  fromValues <- traverse (genFromValue $ namespaceBehavior o) schemas
   toAvros   <- traverse (genToAvro o) schemas
-  pure $ join types <> join hasSchema <> join fromAvros <> join fromLazyAvros <> join toAvros <> join fromValues
+  toEncodings <- traverse (genToEncoding o) schemas
+  pure $ join types <> join hasSchema <> join fromAvros <> join fromLazyAvros <> join toAvros <> join fromValues <> join toEncodings
 
 -- | Derives "read only" Avro from a given schema file. For a schema
 -- with a top-level definition @com.example.Foo@, this generates:
@@ -279,7 +281,7 @@ deriveFromAvroWithOptions' o s = do
   hasSchema <- traverse (genHasAvroSchema $ namespaceBehavior o) schemas
   fromAvros <- traverse (genFromAvro $ namespaceBehavior o) schemas
   fromLazyAvros <- traverse (genFromLazyAvro $ namespaceBehavior o) schemas
-  fromValues <- traverse (genFromAvroNew $ namespaceBehavior o) schemas
+  fromValues <- traverse (genFromValue $ namespaceBehavior o) schemas
   pure $ join types <> join hasSchema <> join fromAvros <> join fromLazyAvros <> join fromValues
 
 -- | Same as 'deriveAvroWithOptions' but uses 'defaultDeriveOptions'
@@ -376,25 +378,25 @@ genFromAvroFieldsExp n (x:xs) =
 badValueNew :: Show v => v -> String -> Either String a
 badValueNew v t = Left $ "Unexpected value for '" <> t <> "': " <> show v
 
-genFromAvroNew :: NamespaceBehavior -> Schema -> Q [Dec]
-genFromAvroNew namespaceBehavior (S.Enum n _ _ _ ) =
+genFromValue :: NamespaceBehavior -> Schema -> Q [Dec]
+genFromValue namespaceBehavior (S.Enum n _ _ _ ) =
   [d| instance AV.FromValue $(conT $ mkDataTypeName namespaceBehavior n) where
         fromValue (AV.Enum i _) = $([| pure . toEnum|]) i
         fromValue value         = $( [|\v -> badValueNew v $(mkTextLit $ S.renderFullname n)|] ) value
   |]
-genFromAvroNew namespaceBehavior (S.Record n _ _ _ fs) =
+genFromValue namespaceBehavior (S.Record n _ _ _ fs) =
   [d| instance AV.FromValue $(conT $ mkDataTypeName namespaceBehavior n) where
         fromValue (AV.Record r) =
            $(genFromAvroNewFieldsExp (mkDataTypeName namespaceBehavior n) fs) r
         fromValue value           = $( [|\v -> badValueNew v $(mkTextLit $ S.renderFullname n)|] ) value
   |]
-genFromAvroNew namespaceBehavior (S.Fixed n _ s) =
+genFromValue namespaceBehavior (S.Fixed n _ s) =
   [d| instance AV.FromValue $(conT $ mkDataTypeName namespaceBehavior n) where
         fromValue (AV.Fixed v)
           | BS.length v == s = pure $ $(conE (mkDataTypeName namespaceBehavior n)) v
         fromValue value = $( [|\v -> badValueNew v $(mkTextLit $ S.renderFullname n)|] ) value
   |]
-genFromAvroNew _ _                             = pure []
+genFromValue _ _                             = pure []
 
 genFromAvroNewFieldsExp :: Name -> [Field] -> Q Exp
 genFromAvroNewFieldsExp n xs =
@@ -455,6 +457,46 @@ newNames :: String
             -- ^ count
          -> Q [Name]
 newNames base n = sequence [newName (base ++ show i) | i <- [1..n]]
+
+------------------------- ToEncoding ------------------------------------------------
+
+genToEncoding :: DeriveOptions -> Schema -> Q [Dec]
+genToEncoding opts s@(S.Enum n _ _ _) =
+  toEncodingInstance (mkSchemaValueName (namespaceBehavior opts) n)
+  where
+    toEncodingInstance sname =
+      [d| instance ToEncoding $(conT $ mkDataTypeName (namespaceBehavior opts) n) where
+            toEncoding = $([| \_ x -> putI (fromEnum x) |])
+      |]
+
+genToEncoding opts s@(S.Record n _ _ _ fs) =
+  toEncodingInstance (mkSchemaValueName (namespaceBehavior opts) n)
+  where
+    toEncodingInstance sname =
+      [d| instance ToEncoding $(conT $ mkDataTypeName (namespaceBehavior opts) n) where
+            toEncoding = $(toEncodingFieldsExp sname)
+      |]
+    toEncodingFieldsExp sname = do
+      names <- newNames "p_" (length fs)
+      wn <- varP <$> newName "_"
+      let con = conP (mkDataTypeName (namespaceBehavior opts) n) (varP <$> names)
+      lamE [wn, con]
+            [| mconcat $( let build (fld, n) = [| toEncoding (fldType fld) $(varE n) |]
+                          in listE $ build <$> (zip fs names)
+                        )
+            |]
+
+genToEncoding opts s@(S.Fixed n _ _) =
+  toEncodingInstance (mkSchemaValueName (namespaceBehavior opts) n)
+  where
+    toEncodingInstance sname =
+      [d| instance ToEncoding $(conT $ mkDataTypeName (namespaceBehavior opts) n) where
+            toEncoding = $(do
+              x <- newName "x"
+              wc <- newName "_"
+              lamE [varP wc, conP (mkDataTypeName (namespaceBehavior opts) n) [varP x]] [| toEncoding $(varE sname) $(varE x) |])
+      |]
+genToEncoding _ _ = pure []
 
 ------------------------- ToAvro ----------------------------------------------
 
@@ -662,15 +704,15 @@ genNewtype dn = do
 genEnum :: Name -> [Name] -> Q Dec
 #if MIN_VERSION_template_haskell(2,12,0)
 genEnum dn vs = do
-  ders <- sequenceA [[t|Eq|], [t|Show|], [t|Ord|], [t|Enum|], [t|Generic|]]
+  ders <- sequenceA [[t|Eq|], [t|Show|], [t|Ord|], [t|Enum|], [t|Bounded|], [t|Generic|]]
   pure $ DataD [] dn [] Nothing ((\n -> NormalC n []) <$> vs) [DerivClause Nothing ders]
 #elif MIN_VERSION_template_haskell(2,11,0)
 genEnum dn vs = do
-  ders <- sequenceA [[t|Eq|], [t|Show|], [t|Ord|], [t|Enum|], [t|Generic|]]
+  ders <- sequenceA [[t|Eq|], [t|Show|], [t|Ord|], [t|Enum|], [t|Bounded|], [t|Generic|]]
   pure $ DataD [] dn [] Nothing ((\n -> NormalC n []) <$> vs) ders
 #else
 genEnum dn vs = do
-  [ConT eq, ConT sh, ConT or, ConT en, ConT gen] <- sequenceA [[t|Eq|], [t|Show|], [t|Ord|], [t|Enum|], [t|Generic|]]
+  [ConT eq, ConT sh, ConT or, ConT en, ConT gen] <- sequenceA [[t|Eq|], [t|Show|], [t|Ord|], [t|Enum|], [t|Bounded|], [t|Generic|]]
   pure $ DataD [] dn [] ((\n -> NormalC n []) <$> vs) [eq, sh, or, en, gen]
 #endif
 
