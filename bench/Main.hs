@@ -19,6 +19,6 @@ main = defaultMain
 
   Deconflict.only
   , Deconflict.notOnly
-
   , Encoding.encodeToBS
+  , Deconflict.container
   ]

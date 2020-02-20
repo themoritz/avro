@@ -12,6 +12,7 @@ import qualified Codec.Compression.Zlib     as Z
 import           Control.Monad              (replicateM, when)
 import qualified Data.Aeson                 as A
 import qualified Data.Array                 as Array
+import           Data.Avro.Internal.Get
 import           Data.Binary.Get            (Get, runGetOrFail)
 import qualified Data.Binary.Get            as G
 import           Data.Binary.IEEE754        as IEEE
@@ -86,10 +87,10 @@ getAvroOf ty0 = go ty0
 
  getField :: Field -> Get (Maybe (Text, T.Value Schema))
  getField Field{..} =
-  case (fldStatus, fldDefault) of
-    (AsIs _, _)          -> Just . (fldName,) <$> go fldType
-    (Defaulted, Just v)  -> pure $ Just (fldName, v)
-    (Ignored,   Nothing) -> go fldType >> pure Nothing
+  case fldStatus of
+    AsIs _        -> Just . (fldName,) <$> go fldType
+    Defaulted _ v -> pure $ Just (fldName, v)
+    Ignored       -> go fldType >> pure Nothing
 
  getKVBlocks :: Schema -> Get [[(Text,T.Value Schema)]]
  getKVBlocks t =

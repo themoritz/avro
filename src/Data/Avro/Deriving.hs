@@ -390,7 +390,7 @@ genFromValue namespaceBehavior (S.Record n _ _ _ fs) =
            $(genFromAvroNewFieldsExp (mkDataTypeName namespaceBehavior n) fs) r
         fromValue value           = $( [|\v -> badValueNew v $(mkTextLit $ S.renderFullname n)|] ) value
   |]
-genFromValue namespaceBehavior (S.Fixed n _ s) =
+genFromValue namespaceBehavior (S.Fixed n _ s _) =
   [d| instance AV.FromValue $(conT $ mkDataTypeName namespaceBehavior n) where
         fromValue (AV.Fixed v)
           | BS.length v == s = pure $ $(conE (mkDataTypeName namespaceBehavior n)) v
@@ -486,7 +486,7 @@ genToEncoding opts s@(S.Record n _ _ _ fs) =
                         )
             |]
 
-genToEncoding opts s@(S.Fixed n _ _) =
+genToEncoding opts s@(S.Fixed n _ _ _) =
   toEncodingInstance (mkSchemaValueName (namespaceBehavior opts) n)
   where
     toEncodingInstance sname =

@@ -841,6 +841,61 @@ instance (FromValue a, FromValue b, FromValue c, FromValue d, FromValue e) => Fr
   fromValue (AV.Union 4 e) = E5_5 <$> fromValue e
   fromValue (AV.Union n _) = Left ("Unable to decode Either5 from a position #" <> show n)
 
+instance (FromValue a, FromValue b, FromValue c, FromValue d, FromValue e, FromValue f) => FromValue (Either6 a b c d e f) where
+  fromValue (AV.Union 0 a) = E6_1 <$> fromValue a
+  fromValue (AV.Union 1 b) = E6_2 <$> fromValue b
+  fromValue (AV.Union 2 c) = E6_3 <$> fromValue c
+  fromValue (AV.Union 3 d) = E6_4 <$> fromValue d
+  fromValue (AV.Union 4 e) = E6_5 <$> fromValue e
+  fromValue (AV.Union 5 f) = E6_6 <$> fromValue f
+  fromValue (AV.Union n _) = Left ("Unable to decode Either6 from a position #" <> show n)
+
+instance (FromValue a, FromValue b, FromValue c, FromValue d, FromValue e, FromValue f, FromValue g) => FromValue (Either7 a b c d e f g) where
+  fromValue (AV.Union 0 a) = E7_1 <$> fromValue a
+  fromValue (AV.Union 1 b) = E7_2 <$> fromValue b
+  fromValue (AV.Union 2 c) = E7_3 <$> fromValue c
+  fromValue (AV.Union 3 d) = E7_4 <$> fromValue d
+  fromValue (AV.Union 4 e) = E7_5 <$> fromValue e
+  fromValue (AV.Union 5 f) = E7_6 <$> fromValue f
+  fromValue (AV.Union 6 g) = E7_7 <$> fromValue g
+  fromValue (AV.Union n _) = Left ("Unable to decode Either7 from a position #" <> show n)
+
+instance (FromValue a, FromValue b, FromValue c, FromValue d, FromValue e, FromValue f, FromValue g, FromValue h) => FromValue (Either8 a b c d e f g h) where
+  fromValue (AV.Union 0 a) = E8_1 <$> fromValue a
+  fromValue (AV.Union 1 b) = E8_2 <$> fromValue b
+  fromValue (AV.Union 2 c) = E8_3 <$> fromValue c
+  fromValue (AV.Union 3 d) = E8_4 <$> fromValue d
+  fromValue (AV.Union 4 e) = E8_5 <$> fromValue e
+  fromValue (AV.Union 5 f) = E8_6 <$> fromValue f
+  fromValue (AV.Union 6 g) = E8_7 <$> fromValue g
+  fromValue (AV.Union 7 h) = E8_8 <$> fromValue h
+  fromValue (AV.Union n _) = Left ("Unable to decode Either8 from a position #" <> show n)
+
+instance (FromValue a, FromValue b, FromValue c, FromValue d, FromValue e, FromValue f, FromValue g, FromValue h, FromValue i) => FromValue (Either9 a b c d e f g h i) where
+  fromValue (AV.Union 0 a) = E9_1 <$> fromValue a
+  fromValue (AV.Union 1 b) = E9_2 <$> fromValue b
+  fromValue (AV.Union 2 c) = E9_3 <$> fromValue c
+  fromValue (AV.Union 3 d) = E9_4 <$> fromValue d
+  fromValue (AV.Union 4 e) = E9_5 <$> fromValue e
+  fromValue (AV.Union 5 f) = E9_6 <$> fromValue f
+  fromValue (AV.Union 6 g) = E9_7 <$> fromValue g
+  fromValue (AV.Union 7 h) = E9_8 <$> fromValue h
+  fromValue (AV.Union 8 i) = E9_9 <$> fromValue i
+  fromValue (AV.Union n _) = Left ("Unable to decode Either9 from a position #" <> show n)
+
+instance (FromValue a, FromValue b, FromValue c, FromValue d, FromValue e, FromValue f, FromValue g, FromValue h, FromValue i, FromValue j) => FromValue (Either10 a b c d e f g h i j) where
+  fromValue (AV.Union 0 a) = E10_1 <$> fromValue a
+  fromValue (AV.Union 1 b) = E10_2 <$> fromValue b
+  fromValue (AV.Union 2 c) = E10_3 <$> fromValue c
+  fromValue (AV.Union 3 d) = E10_4 <$> fromValue d
+  fromValue (AV.Union 4 e) = E10_5 <$> fromValue e
+  fromValue (AV.Union 5 f) = E10_6 <$> fromValue f
+  fromValue (AV.Union 6 g) = E10_7 <$> fromValue g
+  fromValue (AV.Union 7 h) = E10_8 <$> fromValue h
+  fromValue (AV.Union 8 i) = E10_9 <$> fromValue i
+  fromValue (AV.Union 9 j) = E10_9 <$> fromValue j
+  fromValue (AV.Union n _) = Left ("Unable to decode Either10 from a position #" <> show n)
+
 instance (ToEncoding a, ToEncoding b, ToEncoding c) => ToEncoding (Either3 a b c) where
   toEncoding (S.Union opts) v =
     case V.toList opts of
@@ -873,3 +928,78 @@ instance (ToEncoding a, ToEncoding b, ToEncoding c, ToEncoding d, ToEncoding e) 
         E5_5 e -> putI 4 <> toEncoding se e
       wrongOpts   -> error ("Unable to encode Either5 as " <> show wrongOpts)
   toEncoding s _ = error ("Unable to encode Either5 as " <> show s)
+
+instance (ToEncoding a, ToEncoding b, ToEncoding c, ToEncoding d, ToEncoding e, ToEncoding f) => ToEncoding (Either6 a b c d e f) where
+  toEncoding (S.Union opts) v =
+    case V.toList opts of
+      [sa, sb, sc, sd, se, sf] -> case v of
+        E6_1 a -> putI 0 <> toEncoding sa a
+        E6_2 b -> putI 1 <> toEncoding sb b
+        E6_3 c -> putI 2 <> toEncoding sc c
+        E6_4 d -> putI 3 <> toEncoding sd d
+        E6_5 e -> putI 4 <> toEncoding se e
+        E6_6 f -> putI 5 <> toEncoding sf f
+      wrongOpts   -> error ("Unable to encode Either6 as " <> show wrongOpts)
+  toEncoding s _ = error ("Unable to encode Either6 as " <> show s)
+
+instance (ToEncoding a, ToEncoding b, ToEncoding c, ToEncoding d, ToEncoding e, ToEncoding f, ToEncoding g) => ToEncoding (Either7 a b c d e f g) where
+  toEncoding (S.Union opts) v =
+    case V.toList opts of
+      [sa, sb, sc, sd, se, sf, sg] -> case v of
+        E7_1 a -> putI 0 <> toEncoding sa a
+        E7_2 b -> putI 1 <> toEncoding sb b
+        E7_3 c -> putI 2 <> toEncoding sc c
+        E7_4 d -> putI 3 <> toEncoding sd d
+        E7_5 e -> putI 4 <> toEncoding se e
+        E7_6 f -> putI 5 <> toEncoding sf f
+        E7_7 g -> putI 6 <> toEncoding sg g
+      wrongOpts   -> error ("Unable to encode Either7 as " <> show wrongOpts)
+  toEncoding s _ = error ("Unable to encode Either7 as " <> show s)
+
+instance (ToEncoding a, ToEncoding b, ToEncoding c, ToEncoding d, ToEncoding e, ToEncoding f, ToEncoding g, ToEncoding h) => ToEncoding (Either8 a b c d e f g h) where
+  toEncoding (S.Union opts) v =
+    case V.toList opts of
+      [sa, sb, sc, sd, se, sf, sg, sh] -> case v of
+        E8_1 a -> putI 0 <> toEncoding sa a
+        E8_2 b -> putI 1 <> toEncoding sb b
+        E8_3 c -> putI 2 <> toEncoding sc c
+        E8_4 d -> putI 3 <> toEncoding sd d
+        E8_5 e -> putI 4 <> toEncoding se e
+        E8_6 f -> putI 5 <> toEncoding sf f
+        E8_7 g -> putI 6 <> toEncoding sg g
+        E8_8 h -> putI 7 <> toEncoding sh h
+      wrongOpts   -> error ("Unable to encode Either8 as " <> show wrongOpts)
+  toEncoding s _ = error ("Unable to encode Either8 as " <> show s)
+
+instance (ToEncoding a, ToEncoding b, ToEncoding c, ToEncoding d, ToEncoding e, ToEncoding f, ToEncoding g, ToEncoding h, ToEncoding i) => ToEncoding (Either9 a b c d e f g h i) where
+  toEncoding (S.Union opts) v =
+    case V.toList opts of
+      [sa, sb, sc, sd, se, sf, sg, sh, si] -> case v of
+        E9_1 a -> putI 0 <> toEncoding sa a
+        E9_2 b -> putI 1 <> toEncoding sb b
+        E9_3 c -> putI 2 <> toEncoding sc c
+        E9_4 d -> putI 3 <> toEncoding sd d
+        E9_5 e -> putI 4 <> toEncoding se e
+        E9_6 f -> putI 5 <> toEncoding sf f
+        E9_7 g -> putI 6 <> toEncoding sg g
+        E9_8 h -> putI 7 <> toEncoding sh h
+        E9_9 i -> putI 8 <> toEncoding si i
+      wrongOpts   -> error ("Unable to encode Either9 as " <> show wrongOpts)
+  toEncoding s _ = error ("Unable to encode Either9 as " <> show s)
+
+instance (ToEncoding a, ToEncoding b, ToEncoding c, ToEncoding d, ToEncoding e, ToEncoding f, ToEncoding g, ToEncoding h, ToEncoding i, ToEncoding j) => ToEncoding (Either10 a b c d e f g h i j) where
+  toEncoding (S.Union opts) v =
+    case V.toList opts of
+      [sa, sb, sc, sd, se, sf, sg, sh, si, sj] -> case v of
+        E10_1 a  -> putI 0 <> toEncoding sa a
+        E10_2 b  -> putI 1 <> toEncoding sb b
+        E10_3 c  -> putI 2 <> toEncoding sc c
+        E10_4 d  -> putI 3 <> toEncoding sd d
+        E10_5 e  -> putI 4 <> toEncoding se e
+        E10_6 f  -> putI 5 <> toEncoding sf f
+        E10_7 g  -> putI 6 <> toEncoding sg g
+        E10_8 h  -> putI 7 <> toEncoding sh h
+        E10_9 i  -> putI 8 <> toEncoding si i
+        E10_10 j -> putI 9 <> toEncoding si j
+      wrongOpts   -> error ("Unable to encode Either10 as " <> show wrongOpts)
+  toEncoding s _ = error ("Unable to encode Either10 as " <> show s)

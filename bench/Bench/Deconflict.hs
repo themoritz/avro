@@ -8,6 +8,7 @@
 module Bench.Deconflict
 ( only
 , notOnly
+, container
 )
 where
 
@@ -18,6 +19,10 @@ import Data.Avro.FromAvro   (fromAvro)
 import Data.Avro.Schema     (Result)
 import Data.Vector          (Vector)
 import Text.RawString.QQ
+
+import           Data.Avro                    (decodeContainerWithSchema, encodeContainer)
+import qualified Data.Avro.Decode.Lazy        as Lazy
+import qualified Data.Avro.Encoding.Container as Enc
 
 import qualified Bench.Deconflict.Reader as R
 import qualified Bench.Deconflict.Writer as W
@@ -57,3 +62,10 @@ notOnly = env (many 1e5 $ encode <$> newOuter) $ \ values ->
         ]
     ]
 
+container :: Benchmark
+container = env (many 1e5 newOuter >>= (\vs -> encodeContainer [Vector.toList vs])) $ \payload ->
+  bgroup "Decoding container"
+    [ bench "Avro Strict"   $ nf (decodeContainerWithSchema @R.Outer R.schema'Outer) payload
+    , bench "Avro Lazy"     $ nf (Lazy.decodeContainerWithSchema @R.Outer R.schema'Outer) payload
+    , bench "From Encoding" $ nf (Enc.decodeContainerWithReaderSchema @R.Outer R.schema'Outer) payload
+    ]

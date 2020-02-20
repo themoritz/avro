@@ -41,7 +41,7 @@ import           Data.List                  as DL
 import           Data.List.NonEmpty         (NonEmpty (..))
 import qualified Data.List.NonEmpty         as NE
 import qualified Data.Map.Strict            as Map
-import           Data.Maybe                 (catMaybes, mapMaybe)
+import           Data.Maybe                 (catMaybes, fromJust, mapMaybe)
 import           Data.Monoid
 import           Data.Proxy
 import qualified Data.Set                   as S

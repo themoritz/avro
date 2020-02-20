@@ -5,13 +5,14 @@
 
 module Data.Avro.Encoding.Value where
 
-import Control.DeepSeq     (NFData)
-import Data.HashMap.Strict (HashMap)
+import Control.DeepSeq        (NFData)
+import Control.Monad.Identity (Identity (..))
+import Data.HashMap.Strict    (HashMap)
 import Data.Int
-import Data.List.NonEmpty  (NonEmpty)
+import Data.List.NonEmpty     (NonEmpty)
 import Data.Text
-import Data.Vector         (Vector)
-import GHC.Generics        (Generic)
+import Data.Vector            (Vector)
+import GHC.Generics           (Generic)
 
 import qualified Data.ByteString      as BS
 import qualified Data.ByteString.Lazy as BL
@@ -101,6 +102,10 @@ instance FromValue a => FromValue [a] where
   fromValue (Array vec) = mapM fromValue $ V.toList vec
   fromValue x           = Left ("Expected Array, but got: " <> show x)
   {-# INLINE fromValue #-}
+
+instance FromValue a => FromValue (Identity a) where
+  fromValue (Union 0 v) = Identity <$> fromValue v
+  fromValue (Union n _) = Left ("Unable to decode Identity value from value with a position #" <> show n)
 
 instance FromValue a => FromValue (Maybe a) where
   fromValue (Union 0 Null) = Right Nothing

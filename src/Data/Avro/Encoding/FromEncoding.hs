@@ -2,27 +2,30 @@
 module Data.Avro.Encoding.FromEncoding
 where
 
-import           Control.Monad            (forM, replicateM)
-import           Control.Monad.ST         (ST)
-import qualified Data.Avro.Decode.Get     as Get
+import           Control.Monad              (forM, replicateM)
+import           Control.Monad.ST           (ST)
+import           Data.Avro.Encoding.Convert (convertValue)
 import           Data.Avro.Encoding.Value
-import           Data.Avro.Schema         (Field, Schema, TypeName)
-import qualified Data.Avro.Schema         as Schema
-import           Data.Binary.Get          (Get)
-import qualified Data.Binary.Get          as Get
-import qualified Data.ByteString.Lazy     as BL
-import           Data.HashMap.Strict      (HashMap)
-import qualified Data.HashMap.Strict      as HashMap
-import           Data.Text                (Text)
-import           Data.Vector              (Vector)
-import qualified Data.Vector              as V
-import qualified Data.Vector.Mutable      as MV
+import qualified Data.Avro.Internal.Get     as Get
+import           Data.Avro.Schema           (Field, Schema, TypeName)
+import qualified Data.Avro.Schema           as Schema
+import           Data.Binary.Get            (Get, getByteString, runGetOrFail)
+import qualified Data.ByteString.Lazy       as BL
+import           Data.HashMap.Strict        (HashMap)
+import qualified Data.HashMap.Strict        as HashMap
+import           Data.Text                  (Text)
+import           Data.Vector                (Vector)
+import qualified Data.Vector                as V
+import qualified Data.Vector.Mutable        as MV
 
 decodeValueWithSchema :: FromValue a => Schema -> BL.ByteString -> Either String a
-decodeValueWithSchema deconflictedSchema payload =
-  case Get.runGetOrFail (getValue deconflictedSchema) payload of
-    Right (_, _, v) -> fromValue v
-    Left (_, _, e)  -> Left e
+decodeValueWithSchema decodeValueWithSchema = fmap snd . decodeValueWithSchema' decodeValueWithSchema
+
+decodeValueWithSchema' :: FromValue a => Schema -> BL.ByteString -> Either String (BL.ByteString, a)
+decodeValueWithSchema' deconflictedSchema payload =
+  case runGetOrFail (getValue deconflictedSchema) payload of
+    Right (bs, _, v) -> (bs,) <$> fromValue v
+    Left (_, _, e)   -> Left e
 
 getValue :: Schema -> Get Value
 getValue sch =
@@ -32,12 +35,12 @@ getValue sch =
 getField :: HashMap TypeName Schema -> Schema -> Get Value
 getField env sch = case sch of
   Schema.Null                  -> pure Null
-  Schema.Boolean               -> fmap Boolean Get.getAvro
-  Schema.Int                   -> fmap Int     Get.getAvro
-  Schema.Long                  -> fmap Long    Get.getAvro
-  Schema.String                -> fmap String  Get.getAvro
+  Schema.Boolean               -> fmap Boolean Get.getBoolean
+  Schema.Int _                 -> fmap Int     Get.getInt
+  Schema.Long _                -> fmap Long    Get.getLong
+  Schema.String _              -> fmap String  Get.getString
   Schema.Record _ _ _ _ fields -> fmap Record  (getRecord env fields)
-  Schema.Bytes                 -> fmap Bytes   Get.getAvro
+  Schema.Bytes _               -> fmap Bytes   Get.getBytes
 
   Schema.NamedType tn          ->
     case HashMap.lookup tn env of
@@ -56,7 +59,7 @@ getField env sch = case sch of
       Nothing -> fail $ "Decoded Avro tag is outside the expected range for a Union. Tag: " <> show i <> " union of: " <> show (V.map Schema.typeName opts)
       Just t  -> Union (fromIntegral i) <$> getField env t
 
-  Schema.Fixed _ _ size -> Fixed <$> Get.getByteString (fromIntegral size)
+  Schema.Fixed _ _ size _ -> Fixed <$> getByteString (fromIntegral size)
 
   Schema.Array t -> do
     vals <- getBlocksOf env t
@@ -99,9 +102,9 @@ getRecord :: HashMap TypeName Schema -> [Field] -> Get (Vector Value)
 getRecord env fs = do
   moos <- forM fs $ \f ->
     case Schema.fldStatus f of
-      Schema.Ignored   -> getField env (Schema.fldType f) >> pure []
-      Schema.AsIs i    -> fmap ((:[]) . (i, )) (getField env (Schema.fldType f))
-      Schema.Defaulted -> undefined
+      Schema.Ignored       -> getField env (Schema.fldType f) >> pure []
+      Schema.AsIs i        -> fmap ((:[]) . (i, )) (getField env (Schema.fldType f))
+      Schema.Defaulted i v -> pure [(i, convertValue v)] --undefined
 
   return $ V.create $ do
     vals <- MV.unsafeNew (length fs)

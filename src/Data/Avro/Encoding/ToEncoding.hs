@@ -8,6 +8,7 @@
 module Data.Avro.Encoding.ToEncoding
 where
 
+import           Control.Monad.Identity  (Identity (..))
 import qualified Data.Array              as Ar
 import           Data.Avro.EncodeRaw
 import           Data.Avro.Schema        as S
@@ -36,43 +37,43 @@ class ToEncoding a where
   toEncoding :: Schema -> a -> Builder
 
 instance ToEncoding Int where
-  toEncoding S.Long i = encodeRaw @Int64 (fromIntegral i)
-  toEncoding S.Int i  = encodeRaw @Int32 (fromIntegral i)
-  toEncoding s _      = error ("Unable to encode Int as: " <> show s)
+  toEncoding (S.Long _) i = encodeRaw @Int64 (fromIntegral i)
+  toEncoding (S.Int _) i  = encodeRaw @Int32 (fromIntegral i)
+  toEncoding s _          = error ("Unable to encode Int as: " <> show s)
   {-# INLINE toEncoding #-}
 
 instance ToEncoding Int32 where
-  toEncoding S.Long i = encodeRaw @Int64 (fromIntegral i)
-  toEncoding S.Int i  = encodeRaw @Int32 i
-  toEncoding s _      = error ("Unable to encode Int32 as: " <> show s)
+  toEncoding (S.Long _) i = encodeRaw @Int64 (fromIntegral i)
+  toEncoding (S.Int _) i  = encodeRaw @Int32 i
+  toEncoding s _          = error ("Unable to encode Int32 as: " <> show s)
   {-# INLINE toEncoding #-}
 
 instance ToEncoding Int64 where
-  toEncoding S.Long i = encodeRaw @Int64 i
-  toEncoding s _      = error ("Unable to encode Int64 as: " <> show s)
+  toEncoding (S.Long _) i = encodeRaw @Int64 i
+  toEncoding s _          = error ("Unable to encode Int64 as: " <> show s)
   {-# INLINE toEncoding #-}
 
 instance ToEncoding Word8 where
-  toEncoding S.Int i  = encodeRaw @Word8 i
-  toEncoding S.Long i = encodeRaw @Word64 (fromIntegral i)
-  toEncoding s _      = error ("Unable to encode Word8 as: " <> show s)
+  toEncoding (S.Int _) i  = encodeRaw @Word8 i
+  toEncoding (S.Long _) i = encodeRaw @Word64 (fromIntegral i)
+  toEncoding s _          = error ("Unable to encode Word8 as: " <> show s)
   {-# INLINE toEncoding #-}
 
 instance ToEncoding Word16 where
-  toEncoding S.Int i  = encodeRaw @Word16 i
-  toEncoding S.Long i = encodeRaw @Word64 (fromIntegral i)
-  toEncoding s _      = error ("Unable to encode Word16 as: " <> show s)
+  toEncoding (S.Int _) i  = encodeRaw @Word16 i
+  toEncoding (S.Long _) i = encodeRaw @Word64 (fromIntegral i)
+  toEncoding s _          = error ("Unable to encode Word16 as: " <> show s)
   {-# INLINE toEncoding #-}
 
 instance ToEncoding Word32 where
-  toEncoding S.Int i  = encodeRaw @Word32 i
-  toEncoding S.Long i = encodeRaw @Word64 (fromIntegral i)
-  toEncoding s _      = error ("Unable to encode Word32 as: " <> show s)
+  toEncoding (S.Int _) i  = encodeRaw @Word32 i
+  toEncoding (S.Long _) i = encodeRaw @Word64 (fromIntegral i)
+  toEncoding s _          = error ("Unable to encode Word32 as: " <> show s)
   {-# INLINE toEncoding #-}
 
 instance ToEncoding Word64 where
-  toEncoding S.Long i = encodeRaw @Word64 i
-  toEncoding s _      = error ("Unable to encode Word64 as: " <> show s)
+  toEncoding (S.Long _) i = encodeRaw @Word64 i
+  toEncoding s _          = error ("Unable to encode Word64 as: " <> show s)
   {-# INLINE toEncoding #-}
 
 instance ToEncoding Double where
@@ -93,10 +94,10 @@ instance ToEncoding Bool where
 
 instance ToEncoding B.ByteString where
   toEncoding s bs = case s of
-    S.Bytes                          -> encodeRaw (B.length bs) <> byteString bs
-    S.Fixed _ _ l | l == B.length bs -> byteString bs
-    S.Fixed _ _ l                    -> error ("Unable to encode ByteString as Fixed(" <> show l <> ") because its length is " <> show (B.length bs))
-    _                                -> error ("Unable to encode ByteString as: " <> show s)
+    (S.Bytes _)                        -> encodeRaw (B.length bs) <> byteString bs
+    S.Fixed _ _ l _ | l == B.length bs -> byteString bs
+    S.Fixed _ _ l _                    -> error ("Unable to encode ByteString as Fixed(" <> show l <> ") because its length is " <> show (B.length bs))
+    _                                  -> error ("Unable to encode ByteString as: " <> show s)
   {-# INLINE toEncoding #-}
 
 instance ToEncoding BL.ByteString where
@@ -109,9 +110,9 @@ instance ToEncoding Text where
       bs = T.encodeUtf8 v
       res = encodeRaw (B.length bs) <> byteString bs
     in case s of
-      S.Bytes  -> res
-      S.String -> res
-      _        -> error ("Unable to encode Text as: " <> show s)
+      (S.Bytes _)  -> res
+      (S.String _) -> res
+      _            -> error ("Unable to encode Text as: " <> show s)
   {-# INLINE toEncoding #-}
 
 instance ToEncoding TL.Text where
@@ -141,13 +142,13 @@ instance (U.Unbox a, ToEncoding a) => ToEncoding (U.Vector a) where
 instance ToEncoding a => ToEncoding (Map.Map Text a) where
   toEncoding (S.Map s) hm =
     if Map.null hm then long0 else putI (F.length hm) <> foldMap putKV (Map.toList hm) <> long0
-    where putKV (k,v) = toEncoding S.String k <> toEncoding s v
+    where putKV (k,v) = toEncoding S.String' k <> toEncoding s v
   toEncoding s _         = error ("Unable to encode HashMap as: " <> show s)
 
 instance ToEncoding a => ToEncoding (HashMap Text a) where
   toEncoding (S.Map s) hm =
     if HashMap.null hm then long0 else putI (F.length hm) <> foldMap putKV (HashMap.toList hm) <> long0
-    where putKV (k,v) = toEncoding S.String k <> toEncoding s v
+    where putKV (k,v) = toEncoding S.String' k <> toEncoding s v
   toEncoding s _         = error ("Unable to encode HashMap as: " <> show s)
 
 instance ToEncoding a => ToEncoding (Maybe a) where
@@ -156,6 +157,13 @@ instance ToEncoding a => ToEncoding (Maybe a) where
       [S.Null, s] -> maybe (putI 0) (\a -> putI 1 <> toEncoding s a) v
       wrongOpts   -> error ("Unable to encode Maybe as " <> show wrongOpts)
   toEncoding s _ = error ("Unable to encode Maybe as " <> show s)
+
+instance (ToEncoding a) => ToEncoding (Identity a) where
+  toEncoding (S.Union opts) e@(Identity a) =
+    case V.toList opts of
+      [sch] -> putI 0 <> toEncoding sch a
+      _     -> error ("Unable to encode Identity as a single-value union: " <> show opts)
+  toEncoding s _ = error ("Unable to encode Identity value as " <> show s)
 
 instance (ToEncoding a, ToEncoding b) => ToEncoding (Either a b) where
   toEncoding (S.Union opts) v =

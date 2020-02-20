@@ -136,11 +136,11 @@ deconflictFields :: [Field] -> [Field] -> Either String [Field]
 deconflictFields writerFields readerFields =
   sequence $ (deconflictField <$> writerFields) <> defaultedFields
   where
-    defaultedFields = [confirmDefaulted f | f <- readerFields, findField f writerFields == Nothing]
+    defaultedFields = [uncurry confirmDefaulted f | f <- (zip [0..] readerFields), findField (snd f) writerFields == Nothing]
 
-    confirmDefaulted :: Field -> Either String Field
-    confirmDefaulted f
-      | Just def <- fldDefault f = pure f { fldStatus = Defaulted }
+    confirmDefaulted :: Int -> Field -> Either String Field
+    confirmDefaulted ix f
+      | Just def <- fldDefault f = pure f { fldStatus = Defaulted ix def }
       | otherwise = Left $ "No default found for deconflicted field " <> Text.unpack (fldName f)
 
     deconflictField :: Field -> Either String Field
@@ -154,12 +154,13 @@ deconflictFields writerFields readerFields =
 findField :: Field -> [Field] -> Maybe Field
 findField f fs =
   let
+    setStatus f' = f' {fldStatus = fldStatus f}
     byName = find (\x -> fldName x == fldName f) fs
     allNames fld = Set.fromList (fldName fld : fldAliases fld)
     fNames = allNames f
     sameField = not . Set.null . Set.intersection fNames . allNames
     byAliases = find sameField fs
-  in byName <|> byAliases
+  in fmap setStatus (byName <|> byAliases)
 
 findType :: Foldable f => Schema -> f Schema -> Maybe Schema
 findType schema =

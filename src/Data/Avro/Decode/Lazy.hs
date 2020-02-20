@@ -70,6 +70,8 @@ import Data.Avro.Decode.Get
 import Data.Avro.Decode.Lazy.Convert      (fromStrictValue, toStrictValue)
 import Data.Avro.Decode.Lazy.FromLazyAvro
 import Data.Avro.FromAvro
+import Data.Avro.Internal.Container       (ContainerHeader (..), consumeN, decodeRawBlocks, getContainerHeader, nrSyncBytes)
+import Data.Avro.Internal.Get
 import Data.Avro.Schema.Deconflict
 
 -- | Decodes the container as a lazy list of values of the requested type.
@@ -153,65 +155,6 @@ getContainerValues :: BL.ByteString -> Either String (Schema, [[T.LazyValue Sche
 getContainerValues = getContainerValuesWith getAvroOf
 {-# INLINABLE getContainerValues #-}
 
--- | Reads the container as a list of blocks without decoding them into actual values.
---
--- This can be useful for streaming / splitting / merging Avro containers without
--- paying the cost for Avro encoding/decoding.
---
--- Each block is returned as a raw 'ByteString' annotated with the number of Avro values
--- that are contained in this block.
---
--- The "outer" error represents the error in opening the container itself
--- (including problems like reading schemas embedded into the container.)
-decodeRawBlocks :: BL.ByteString -> Either String (Schema, [Either String (Int, BL.ByteString)])
-decodeRawBlocks bs =
-  case runGetOrFail getAvro bs of
-    Left (bs', _, err) -> Left err
-    Right (bs', _, ContainerHeader {..}) ->
-      let blocks = allBlocks syncBytes decompress bs'
-      in Right (containedSchema, blocks)
-  where
-    allBlocks sync decompress bytes =
-      flip unfoldr (Just bytes) $ \acc -> case acc of
-        Just rest -> next sync decompress rest
-        Nothing   -> Nothing
-
-    next syncBytes decompress bytes =
-      case getNextBlock syncBytes decompress bytes of
-        Right (Just (numObj, block, rest)) -> Just (Right (numObj, block), Just rest)
-        Right Nothing                      -> Nothing
-        Left err                           -> Just (Left err, Nothing)
-
-getNextBlock :: BL.ByteString
-             -> Decompress BL.ByteString
-             -> BL.ByteString
-             -> Either String (Maybe (Int, BL.ByteString, BL.ByteString))
-getNextBlock sync decompress bs =
-  if BL.null bs
-    then Right Nothing
-    else case runGetOrFail (getRawBlock decompress) bs of
-      Left (bs', _, err)             -> Left err
-      Right (bs', _, (nrObj, bytes)) ->
-        case checkMarker sync bs' of
-          Left err   -> Left err
-          Right rest -> Right $ Just (nrObj, bytes, rest)
-  where
-    getRawBlock :: Decompress BL.ByteString -> Get (Int, BL.ByteString)
-    getRawBlock decompress = do
-      nrObj    <- getLong >>= sFromIntegral
-      nrBytes  <- getLong
-      compressed <- G.getLazyByteString nrBytes
-      bytes <- case decompress compressed G.getRemainingLazyByteString of
-        Right x  -> pure x
-        Left err -> fail err
-      pure (nrObj, bytes)
-
-    checkMarker :: BL.ByteString -> BL.ByteString -> Either String BL.ByteString
-    checkMarker sync bs =
-      case BL.splitAt nrSyncBytes bs of
-        (marker, _) | marker /= sync -> Left "Invalid marker, does not match sync bytes."
-        (_, rest)                    -> Right rest
-
 getContainerValuesWith :: (Schema -> BL.ByteString -> (BL.ByteString, T.LazyValue Schema))
                  -> BL.ByteString
                  -> Either String (Schema, [[T.LazyValue Schema]])
@@ -277,16 +220,6 @@ extractContainerValues f bs =
         Left (bs', _, err)  -> (bs', Left err)
         Right (bs', _, res) -> (bs', Right res)
 
-consumeN :: Int64 -> (a -> (a, b)) -> a -> (a, [b])
-consumeN n f a =
-  if n == 0
-    then (a, [])
-    else
-      let (a', b) = f a
-          (r, bs) = consumeN (n-1) f a'
-      in (r, b:bs)
-{-# INLINE consumeN #-}
-
 getAvroOf :: Schema -> BL.ByteString -> (BL.ByteString, T.LazyValue Schema)
 getAvroOf ty0 bs = go ty0 bs
   where
@@ -346,10 +279,10 @@ getAvroOf ty0 bs = go ty0 bs
 
   getField :: Field -> BL.ByteString -> (BL.ByteString, Maybe (Text, T.LazyValue Schema))
   getField Field{..} bs =
-    case (fldStatus, fldDefault) of
-      (AsIs _, _)          -> Just . (fldName,) <$> go fldType bs
-      (Defaulted, Just v)  -> (bs, Just (fldName, fromStrictValue v))
-      (Ignored, _)         -> (fst (go fldType bs), Nothing)
+    case fldStatus of
+      AsIs _        -> Just . (fldName,) <$> go fldType bs
+      Defaulted _ v -> (bs, Just (fldName, fromStrictValue v))
+      Ignored       -> (fst (go fldType bs), Nothing)
 {-# INLINABLE getAvroOf #-}
 
 getKVPair getElement bs =

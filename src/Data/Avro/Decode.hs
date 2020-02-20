@@ -20,6 +20,7 @@ import qualified Codec.Compression.Zlib     as Z
 import           Control.Monad              (replicateM, when)
 import qualified Data.Aeson                 as A
 import qualified Data.Array                 as Array
+import           Data.Avro.Internal.Get
 import           Data.Binary.Get            (Get, runGetOrFail)
 import qualified Data.Binary.Get            as G
 import           Data.Binary.IEEE754        as IEEE
@@ -49,6 +50,7 @@ import qualified Data.Avro.Types      as T
 import           Data.Avro.Zag
 
 import Data.Avro.Decode.Strict.Internal
+import Data.Avro.Internal.Container     (ContainerHeader (..), getContainerHeader, nrSyncBytes)
 
 -- | Decode bytes into a 'Value' as described by Schema.
 decodeAvro :: Schema -> BL.ByteString -> Either String (T.Value Schema)
@@ -79,7 +81,7 @@ decodeContainerWith schemaToGet bs =
 
 getContainerWith :: (Schema -> Get a) -> Get (Schema, [[a]])
 getContainerWith schemaToGet =
-   do ContainerHeader {..} <- getAvro
+   do ContainerHeader {..} <- getContainerHeader
       (containedSchema,) <$> getBlocks (schemaToGet containedSchema) syncBytes decompress
   where
   getBlocks :: Get a -> BL.ByteString -> (forall x. Decompress x) -> Get [[a]]

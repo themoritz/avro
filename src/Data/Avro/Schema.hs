@@ -368,8 +368,8 @@ typeName bt =
 data FieldStatus
   = AsIs Int
   | Ignored
-  | Defaulted
-  deriving (Show, Ord, Eq, Generic, NFData)
+  | Defaulted Int (Ty.Value Schema)
+  deriving (Show, Eq, Ord, Generic, NFData)
 
 
 data Field = Field { fldName    :: Text
