@@ -36,10 +36,8 @@ import Test.Hspec
 
 spec :: Spec
 spec = describe "Avro.DeconflictSchemaSpec" $ do
-  let Right resSchema = Schema.deconflict UnionsW.schema'Record UnionsR.schema'Record
-
   it "Unions" $ require $ property $ do
-    True === True
+    resSchema <- evalEither $ Schema.deconflict' UnionsW.schema'Record UnionsR.schema'Record
     x <- forAll UnionsW.recordGen
     let nameField = UnionsW.recordName x
     let bs = toLazyByteString $ Encode.toEncoding UnionsW.schema'Record x

@@ -12,17 +12,19 @@ module Bench.Deconflict
 )
 where
 
-import Data.Avro            (decode, encode, toAvro)
+import Data.Avro                   (decode, encode, toAvro)
 import Data.Avro.Deconflict
 import Data.Avro.Deriving
-import Data.Avro.FromAvro   (fromAvro)
-import Data.Avro.Schema     (Result)
-import Data.Vector          (Vector)
+import Data.Avro.FromAvro          (fromAvro)
+import Data.Avro.Schema            (Result)
+import Data.Avro.Schema.ReadSchema (fromSchema)
+import Data.Vector                 (Vector)
 import Text.RawString.QQ
 
-import           Data.Avro                    (decodeContainerWithSchema, encodeContainer)
-import qualified Data.Avro.Decode.Lazy        as Lazy
-import qualified Data.Avro.Encoding.Container as Enc
+import           Data.Avro                       (decodeContainerWithSchema, encodeContainer)
+import qualified Data.Avro.Decode.Lazy           as Lazy
+import qualified Data.Avro.Encoding.Container    as Enc
+import           Data.Avro.Encoding.FromEncoding (decodeValueWithSchema)
 
 import qualified Bench.Deconflict.Reader as R
 import qualified Bench.Deconflict.Writer as W
@@ -45,7 +47,7 @@ only :: Benchmark
 only = env (many 1e5 $ toAvro <$> newOuter) $ \ values ->
   bgroup "Encoded: Value"
     [ bgroup "No Deconflict"
-        [ bench "Decode from value" $ nf (fmap (fromAvro @W.Outer)) values
+        [ bench "Decode via FromAvro" $ nf (fmap (fromAvro @W.Outer)) values
         ]
     -- , bgroup "deconflict"
     --     [ bench "plain"     $ nf (fmap (deconflict          W.schema'Outer R.schema'Outer)) $ values
@@ -55,12 +57,14 @@ only = env (many 1e5 $ toAvro <$> newOuter) $ \ values ->
 
 notOnly :: Benchmark
 notOnly = env (many 1e5 $ encode <$> newOuter) $ \ values ->
-  bgroup "Encoded: ByteString"
-    [ bgroup "No Deconflict"
-        [ bench "Read via current values"  $ nf (fmap (decode @W.Outer)) values
-        , bench "Read via new values"      $ nf (fmap W.ggOuter) values
-        ]
-    ]
+  let
+    readSchema = fromSchema W.schema'Outer
+  in bgroup "Encoded: ByteString"
+      [ bgroup "No Deconflict"
+          [ bench "Read via FromAvro"  $ nf (fmap (decode @W.Outer)) values
+          , bench "Read via Encoding"      $ nf (fmap (decodeValueWithSchema @W.Outer readSchema)) values
+          ]
+      ]
 
 container :: Benchmark
 container = env (many 1e5 newOuter >>= (\vs -> encodeContainer [Vector.toList vs])) $ \payload ->

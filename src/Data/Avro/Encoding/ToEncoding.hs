@@ -11,8 +11,10 @@ where
 import           Control.Monad.Identity  (Identity (..))
 import qualified Data.Array              as Ar
 import           Data.Avro.EncodeRaw
+import           Data.Avro.Internal.Time
 import           Data.Avro.Schema        as S
 import           Data.Avro.Types         as T
+import           Data.Avro.Types.Decimal as D
 import qualified Data.Binary.IEEE754     as IEEE
 import qualified Data.ByteString         as B
 import           Data.ByteString.Builder
@@ -24,14 +26,18 @@ import           Data.Int
 import           Data.Ix                 (Ix)
 import           Data.List               as DL
 import qualified Data.Map.Strict         as Map
+import           Data.Maybe              (fromJust)
 import           Data.Text               (Text)
 import qualified Data.Text               as T
 import qualified Data.Text.Encoding      as T
 import qualified Data.Text.Lazy          as TL
 import qualified Data.Text.Lazy.Encoding as TL
+import qualified Data.Time               as Time
+import qualified Data.UUID               as UUID
 import qualified Data.Vector             as V
 import qualified Data.Vector.Unboxed     as U
 import           Data.Word
+import           GHC.TypeLits
 
 class ToEncoding a where
   toEncoding :: Schema -> a -> Builder
@@ -91,6 +97,28 @@ instance ToEncoding Bool where
   toEncoding S.Boolean v = word8 $ fromIntegral (fromEnum v)
   toEncoding s _         = error ("Unable to encode Bool as: " <> show s)
   {-# INLINE toEncoding #-}
+
+instance (KnownNat p, KnownNat s) => ToEncoding (D.Decimal p s) where
+  toEncoding s = toEncoding @Int64 s . fromIntegral . fromJust . D.underlyingValue
+
+instance ToEncoding UUID.UUID where
+  toEncoding s = toEncoding s . UUID.toText
+  {-# INLINE toEncoding #-}
+
+instance ToEncoding Time.Day where
+  toEncoding s = toEncoding @Int32 s . fromIntegral . daysSinceEpoch
+  {-# INLINE toEncoding #-}
+
+instance ToEncoding Time.DiffTime where
+  toEncoding s@(S.Long (Just S.TimeMicros))      = toEncoding @Int64 s . fromIntegral . diffTimeToMicros
+  toEncoding s@(S.Long (Just S.TimestampMicros)) = toEncoding @Int64 s . fromIntegral . diffTimeToMicros
+  toEncoding s@(S.Long (Just S.TimestampMillis)) = toEncoding @Int64 s . fromIntegral . diffTimeToMillis
+  toEncoding s@(S.Int  (Just S.TimeMillis))      = toEncoding @Int32 s . fromIntegral . diffTimeToMillis
+  toEncoding s                                   = error ("Unble to decode DiffTime from " <> show s)
+
+instance ToEncoding Time.UTCTime where
+  toEncoding s@(S.Long (Just S.TimestampMicros)) = toEncoding @Int64 s . fromIntegral . utcTimeToMicros
+  toEncoding s@(S.Long (Just S.TimestampMillis)) = toEncoding @Int64 s . fromIntegral . utcTimeToMillis
 
 instance ToEncoding B.ByteString where
   toEncoding s bs = case s of
@@ -153,25 +181,25 @@ instance ToEncoding a => ToEncoding (HashMap Text a) where
 
 instance ToEncoding a => ToEncoding (Maybe a) where
   toEncoding (S.Union opts) v =
-    case V.toList opts of
+    case F.toList opts of
       [S.Null, s] -> maybe (putI 0) (\a -> putI 1 <> toEncoding s a) v
       wrongOpts   -> error ("Unable to encode Maybe as " <> show wrongOpts)
   toEncoding s _ = error ("Unable to encode Maybe as " <> show s)
 
 instance (ToEncoding a) => ToEncoding (Identity a) where
   toEncoding (S.Union opts) e@(Identity a) =
-    case V.toList opts of
-      [sch] -> putI 0 <> toEncoding sch a
-      _     -> error ("Unable to encode Identity as a single-value union: " <> show opts)
+    if (ivLength opts == 1)
+      then putI 0 <> toEncoding (ivUnsafeIndex opts 0) a
+      else error ("Unable to encode Identity as a single-value union: " <> show opts)
   toEncoding s _ = error ("Unable to encode Identity value as " <> show s)
 
 instance (ToEncoding a, ToEncoding b) => ToEncoding (Either a b) where
   toEncoding (S.Union opts) v =
-    case V.toList opts of
-      [sa, sb] -> case v of
-        Left a  -> putI 0 <> toEncoding sa a
-        Right b -> putI 1 <> toEncoding sb b
-      wrongOpts   -> error ("Unable to encode Either as " <> show wrongOpts)
+    if (ivLength opts == 2)
+      then case v of
+        Left a  -> putI 0 <> toEncoding (ivUnsafeIndex opts 0) a
+        Right b -> putI 1 <> toEncoding (ivUnsafeIndex opts 1) b
+      else error ("Unable to encode Either as " <> show opts)
   toEncoding s _ = error ("Unable to encode Either as " <> show s)
 
 

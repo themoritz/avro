@@ -64,8 +64,8 @@ encodeToBS :: Benchmark
 encodeToBS = env (many 1e5 $ newOuter) $ \ values ->
   bgroup "Encode to ByteString"
     [ bgroup "Simple type"
-        [ bench "Encode via Value" $ nf (fmap (BL.toStrict . encode)) values
-        , bench "Encode directly"  $ nf (fmap (BL.toStrict . toLazyByteString . toEncoding schema'Outer)) values
+        [ bench "Encode via ToAvro"     $ nf (fmap (BL.toStrict . encode)) values
+        , bench "Encode via ToEncoding" $ nf (fmap (BL.toStrict . toLazyByteString . toEncoding schema'Outer)) values
         ]
     -- , bgroup "deconflict"
     --     [ bench "plain"     $ nf (fmap (deconflict          W.schema'Outer R.schema'Outer)) $ values

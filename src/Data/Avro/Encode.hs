@@ -63,10 +63,10 @@ import           System.Random.TF.Instances (randoms)
 import Data.Avro.Codec
 import Data.Avro.EncodeRaw
 import Data.Avro.HasAvroSchema
+import Data.Avro.Internal.Time
 import Data.Avro.Schema        as S
 import Data.Avro.Types         as T
 import Data.Avro.Types.Decimal as D
-import Data.Avro.Types.Time
 import Data.Avro.Zag
 import Data.Avro.Zig
 
@@ -314,23 +314,23 @@ instance EncodeAvro Bool where
 instance EncodeAvro (T.Value Schema) where
   avro v =
     case v of
-      T.Null      -> avro ()
-      T.Boolean b -> avro b
-      T.Int i     -> avro i
-      T.Long i    -> avro i
-      T.Float f   -> avro f
-      T.Double d  -> avro d
-      T.Bytes bs  -> avro bs
-      T.String t  -> avro t
-      T.Array vec -> avro vec
-      T.Map hm    -> avro hm
+      T.Null        -> avro ()
+      T.Boolean b   -> avro b
+      T.Int _ i     -> avro i
+      T.Long _ i    -> avro i
+      T.Float _ f   -> avro f
+      T.Double _ d  -> avro d
+      T.Bytes _ bs  -> avro bs
+      T.String _ t  -> avro t
+      T.Array vec   -> avro vec
+      T.Map hm      -> avro hm
       T.Record ty hm ->
         let bs = foldMap putAvro (mapMaybe (`HashMap.lookup` hm) fs)
             fs = P.map fldName (fields ty)
         in AvroM (bs, ty)
       T.Union opts sel val | F.length opts > 0 ->
         case V.elemIndex sel opts of
-          Just idx -> AvroM (putI idx <> putAvro val, S.Union opts)
+          Just idx -> AvroM (putI idx <> putAvro val, S.Union (Positional opts))
           Nothing  -> error "Union encoding specifies type not found in schema"
       T.Enum sch@S.Enum{..} ix t -> AvroM (putI ix, sch)
       T.Fixed ty bs  ->

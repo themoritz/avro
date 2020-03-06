@@ -44,6 +44,7 @@ import qualified Data.Avro.Types               as AT
 import           Data.ByteString               (ByteString)
 import qualified Data.ByteString               as B
 import           Data.Char                     (isAlphaNum)
+import qualified Data.Foldable                 as Foldable
 import           Data.Int
 import           Data.List.NonEmpty            (NonEmpty ((:|)))
 import qualified Data.List.NonEmpty            as NE
@@ -51,7 +52,7 @@ import           Data.Map                      (Map)
 import           Data.Maybe                    (fromMaybe)
 import           Data.Semigroup                ((<>))
 import qualified Data.Text                     as Text
-import           Data.Time                     (Day, DiffTime)
+import           Data.Time                     (Day, DiffTime, UTCTime)
 import           Data.UUID                     (UUID)
 
 import qualified Data.Avro.Encoding.Value as AV
@@ -381,8 +382,8 @@ badValueNew v t = Left $ "Unexpected value for '" <> t <> "': " <> show v
 genFromValue :: NamespaceBehavior -> Schema -> Q [Dec]
 genFromValue namespaceBehavior (S.Enum n _ _ _ ) =
   [d| instance AV.FromValue $(conT $ mkDataTypeName namespaceBehavior n) where
-        fromValue (AV.Enum i _) = $([| pure . toEnum|]) i
-        fromValue value         = $( [|\v -> badValueNew v $(mkTextLit $ S.renderFullname n)|] ) value
+        fromValue (AV.Enum _ i _) = $([| pure . toEnum|]) i
+        fromValue value           = $( [|\v -> badValueNew v $(mkTextLit $ S.renderFullname n)|] ) value
   |]
 genFromValue namespaceBehavior (S.Record n _ _ _ fs) =
   [d| instance AV.FromValue $(conT $ mkDataTypeName namespaceBehavior n) where
@@ -392,7 +393,7 @@ genFromValue namespaceBehavior (S.Record n _ _ _ fs) =
   |]
 genFromValue namespaceBehavior (S.Fixed n _ s _) =
   [d| instance AV.FromValue $(conT $ mkDataTypeName namespaceBehavior n) where
-        fromValue (AV.Fixed v)
+        fromValue (AV.Fixed _ v)
           | BS.length v == s = pure $ $(conE (mkDataTypeName namespaceBehavior n)) v
         fromValue value = $( [|\v -> badValueNew v $(mkTextLit $ S.renderFullname n)|] ) value
   |]
@@ -577,15 +578,21 @@ mkFieldTypeName namespaceBehavior = \case
                      -> [t| Decimal $(litT $ numTyLit p) $(litT $ numTyLit s) |]
   S.Long (Just TimeMicros)
                      -> [t| DiffTime |]
+  S.Long (Just TimestampMicros)
+                     -> [t| UTCTime |]
+  S.Long (Just TimestampMillis)
+                     -> [t| UTCTime |]
   S.Long _           -> [t| Int64 |]
   S.Int (Just Date)  -> [t| Day |]
+  S.Int (Just TimeMillis)
+                     -> [t| DiffTime |]
   S.Int _            -> [t| Int32 |]
   S.Float            -> [t| Float |]
   S.Double           -> [t| Double |]
   S.Bytes _          -> [t| ByteString |]
   S.String Nothing   -> [t| Text |]
   S.String (Just UUID) -> [t| UUID |]
-  S.Union branches   -> union (V.toList branches)
+  S.Union branches   -> union (Foldable.toList branches)
   S.Record n _ _ _ _ -> [t| $(conT $ mkDataTypeName namespaceBehavior n) |]
   S.Map x            -> [t| Map Text $(go x) |]
   S.Array x          -> [t| [$(go x)] |]

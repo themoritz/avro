@@ -66,6 +66,7 @@ common doctest-discover         { build-depends: doctest-discover         >= 0.2
 common extra                    { build-depends: extra                                              }
 common fail                     { build-depends: fail                                               }
 common gauge                    { build-depends: gauge                                              }
+common generic-lens             { build-depends: generic-lens                                       }
 common hashable                 { build-depends: hashable                                           }
 common hedgehog                 { build-depends: hedgehog                                           }
 common hw-hspec-hedgehog        { build-depends: hw-hspec-hedgehog                                  }
@@ -151,16 +152,18 @@ library
                         Data.Avro.HasAvroSchema
                         Data.Avro.Internal.Container
                         Data.Avro.Internal.Get
+                        Data.Avro.Internal.Time
                         Data.Avro.JSON
                         Data.Avro.Schema
                         Data.Avro.Schema.Deconflict
+                        Data.Avro.Schema.ReadSchema
                         Data.Avro.ToAvro
                         Data.Avro.Types
                         Data.Avro.Types.Decimal
                         Data.Avro.Types.Value
                         Data.Avro.Zag
                         Data.Avro.Zig
-  other-modules:        Data.Avro.Types.Time
+  other-modules:
   hs-source-dirs:       src
   other-extensions:     OverloadedStrings
 
@@ -177,6 +180,7 @@ test-suite test
                       , directory
                       , extra
                       , fail
+                      , generic-lens
                       , hashable
                       , hedgehog
                       , hw-hspec-hedgehog
@@ -214,9 +218,12 @@ test-suite test
                         Avro.Codec.NestedSpec
                         Avro.Codec.TextSpec
                         Avro.Codec.ZigZagSpec
+                        Avro.Data.Deconflict.Read
+                        Avro.Data.Deconflict.Write
                         Avro.Data.Enums
                         Avro.Data.FixedTypes
                         Avro.Data.Karma
+                        Avro.Data.Logical
                         Avro.Data.Reused
                         Avro.Data.Endpoint
                         Avro.Data.Unions
@@ -238,6 +245,8 @@ test-suite test
                         Avro.DeconflictSpec
                         Avro.DefaultsSpec
                         Avro.EncodeRawSpec
+                        Avro.Encoding.DeconflictSpec
+                        Avro.Encoding.LogicalTypesSpec
                         Avro.JSONSpec
                         Avro.NamespaceSpec
                         Avro.NormSchemaSpec

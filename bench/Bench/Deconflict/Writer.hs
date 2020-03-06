@@ -70,15 +70,3 @@ deriveAvroFromByteString [r|
 deriving instance NFData Inner
 deriving instance NFData Outer
 
-
-
-
-
-
---------------------------- GENERATED? -----------------------------------
-
-ggOuter :: LBS.ByteString -> Either String Outer
-ggOuter bs = case runGetOrFail (getValue schema'Outer) bs of
-    Right (_, _, v) -> fromValue v
-    Left (_, _, e)  -> Left e
-

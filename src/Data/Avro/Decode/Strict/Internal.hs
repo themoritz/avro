@@ -51,13 +51,13 @@ getAvroOf ty0 = go ty0
  go ty =
   case ty of
     Null     -> return T.Null
-    Boolean  -> T.Boolean <$> getAvro
-    Int _    -> T.Int     <$> getAvro
-    Long _   -> T.Long    <$> getAvro
-    Float    -> T.Float   <$> getAvro
-    Double   -> T.Double  <$> getAvro
-    Bytes _  -> T.Bytes   <$> getAvro
-    String _ -> T.String  <$> getAvro
+    Boolean  -> T.Boolean   <$> getAvro
+    Int _    -> T.Int ty    <$> getAvro
+    Long _   -> T.Long ty   <$> getAvro
+    Float    -> T.Float ty  <$> getAvro
+    Double   -> T.Double ty <$> getAvro
+    Bytes _  -> T.Bytes ty  <$> getAvro
+    String _ -> T.String ty <$> getAvro
     Array t  ->
       do vals <- getBlocksOf t
          return $ T.Array (V.fromList $ mconcat vals)
@@ -73,16 +73,16 @@ getAvroOf ty0 = go ty0
          pure (T.Enum ty (fromIntegral i) sym)
     Union ts ->
       do i <- getLong
-         case ts V.!? (fromIntegral i) of
-          Nothing -> fail $ "Decoded Avro tag is outside the expected range for a Union. Tag: " <> show i <> " union of: " <> show (V.map typeName ts)
-          Just t  -> T.Union ts t <$> go t
+         case ts `ivElem` (fromIntegral i) of
+          Nothing -> fail $ "Decoded Avro tag is outside the expected range for a Union. Tag: " <> show i <> " union of: " <> show ts
+          Just t  -> T.Union (extractValues ts) t <$> go t
     Fixed {..} -> T.Fixed ty <$> G.getByteString (fromIntegral size)
-    IntLongCoercion     -> T.Long   . fromIntegral <$> getAvro @Int32
-    IntFloatCoercion    -> T.Float  . fromIntegral <$> getAvro @Int32
-    IntDoubleCoercion   -> T.Double . fromIntegral <$> getAvro @Int32
-    LongFloatCoercion   -> T.Float  . fromIntegral <$> getAvro @Int64
-    LongDoubleCoercion  -> T.Double . fromIntegral <$> getAvro @Int64
-    FloatDoubleCoercion -> T.Double . realToFrac   <$> getAvro @Float
+    IntLongCoercion     -> T.Long   ty . fromIntegral <$> getAvro @Int32
+    IntFloatCoercion    -> T.Float  ty . fromIntegral <$> getAvro @Int32
+    IntDoubleCoercion   -> T.Double ty . fromIntegral <$> getAvro @Int32
+    LongFloatCoercion   -> T.Float  ty . fromIntegral <$> getAvro @Int64
+    LongDoubleCoercion  -> T.Double ty . fromIntegral <$> getAvro @Int64
+    FloatDoubleCoercion -> T.Double ty . realToFrac   <$> getAvro @Float
     FreeUnion _ ty -> T.Union (V.singleton ty) ty <$> go ty
 
  getField :: Field -> Get (Maybe (Text, T.Value Schema))

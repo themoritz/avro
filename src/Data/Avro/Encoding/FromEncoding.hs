@@ -2,45 +2,59 @@
 module Data.Avro.Encoding.FromEncoding
 where
 
-import           Control.Monad              (forM, replicateM)
-import           Control.Monad.ST           (ST)
-import           Data.Avro.Encoding.Convert (convertValue)
+import           Control.Monad               (forM, replicateM)
+import           Control.Monad.ST            (ST)
+import           Data.Avro.Encoding.Convert  (convertValue)
 import           Data.Avro.Encoding.Value
-import qualified Data.Avro.Internal.Get     as Get
-import           Data.Avro.Schema           (Field, Schema, TypeName)
-import qualified Data.Avro.Schema           as Schema
-import           Data.Binary.Get            (Get, getByteString, runGetOrFail)
-import qualified Data.ByteString.Lazy       as BL
-import           Data.HashMap.Strict        (HashMap)
-import qualified Data.HashMap.Strict        as HashMap
-import           Data.Text                  (Text)
-import           Data.Vector                (Vector)
-import qualified Data.Vector                as V
-import qualified Data.Vector.Mutable        as MV
+import qualified Data.Avro.Internal.Get      as Get
+import           Data.Avro.Schema            (TypeName)
+import           Data.Avro.Schema.ReadSchema (ReadField, ReadSchema)
+import qualified Data.Avro.Schema.ReadSchema as Schema
+import           Data.Binary.Get             (Get, getByteString, runGetOrFail)
+import qualified Data.ByteString.Lazy        as BL
+import           Data.HashMap.Strict         (HashMap)
+import qualified Data.HashMap.Strict         as HashMap
+import           Data.Text                   (Text)
+import           Data.Vector                 (Vector)
+import qualified Data.Vector                 as V
+import qualified Data.Vector.Mutable         as MV
 
-decodeValueWithSchema :: FromValue a => Schema -> BL.ByteString -> Either String a
-decodeValueWithSchema decodeValueWithSchema = fmap snd . decodeValueWithSchema' decodeValueWithSchema
+decodeValueWithSchema :: FromValue a => ReadSchema -> BL.ByteString -> Either String a
+decodeValueWithSchema schema = fmap snd . decodeValueWithSchema' schema
 
-decodeValueWithSchema' :: FromValue a => Schema -> BL.ByteString -> Either String (BL.ByteString, a)
-decodeValueWithSchema' deconflictedSchema payload =
-  case runGetOrFail (getValue deconflictedSchema) payload of
+decodeValueWithSchema' :: FromValue a => ReadSchema -> BL.ByteString -> Either String (BL.ByteString, a)
+decodeValueWithSchema' schema payload =
+  case runGetOrFail (getValue schema) payload of
     Right (bs, _, v) -> (bs,) <$> fromValue v
     Left (_, _, e)   -> Left e
 
-getValue :: Schema -> Get Value
+getValue :: ReadSchema -> Get Value
 getValue sch =
   let env = Schema.extractBindings sch
   in getField env sch
 
-getField :: HashMap TypeName Schema -> Schema -> Get Value
+getField :: HashMap TypeName ReadSchema -> ReadSchema -> Get Value
 getField env sch = case sch of
-  Schema.Null                  -> pure Null
-  Schema.Boolean               -> fmap Boolean Get.getBoolean
-  Schema.Int _                 -> fmap Int     Get.getInt
-  Schema.Long _                -> fmap Long    Get.getLong
-  Schema.String _              -> fmap String  Get.getString
-  Schema.Record _ _ _ _ fields -> fmap Record  (getRecord env fields)
-  Schema.Bytes _               -> fmap Bytes   Get.getBytes
+  Schema.Null     -> pure Null
+  Schema.Boolean  -> fmap Boolean                Get.getBoolean
+
+  Schema.Int _ -> fmap (Int sch)              Get.getInt
+
+  Schema.Long Schema.ReadLong _     -> fmap (Long sch)                Get.getLong
+  Schema.Long Schema.LongFromInt _  -> fmap (Long sch . fromIntegral)  Get.getInt
+
+  Schema.Float Schema.ReadFloat      -> fmap (Float sch)                Get.getFloat
+  Schema.Float Schema.FloatFromInt   -> fmap (Float sch . fromIntegral) Get.getInt
+  Schema.Float Schema.FloatFromLong  -> fmap (Float sch . fromIntegral) Get.getLong
+
+  Schema.Double Schema.ReadDouble      -> fmap (Double sch)                 Get.getDouble
+  Schema.Double Schema.DoubleFromInt   -> fmap (Double sch . fromIntegral)  Get.getInt
+  Schema.Double Schema.DoubleFromFloat -> fmap (Double sch . realToFrac)    Get.getFloat
+  Schema.Double Schema.DoubleFromLong  -> fmap (Double sch . fromIntegral)  Get.getLong
+
+  Schema.String _              -> fmap (String sch)           Get.getString
+  Schema.Record _ _ _ _ fields -> fmap Record                 (getRecord env fields)
+  Schema.Bytes _               -> fmap (Bytes sch)            Get.getBytes
 
   Schema.NamedType tn          ->
     case HashMap.lookup tn env of
@@ -51,15 +65,15 @@ getField env sch = case sch of
     i <- Get.getLong
     case symbs V.!? fromIntegral i of
       Nothing -> fail $ "Enum " <> show symbs <> " doesn't contain value at position " <> show i
-      Just v  -> pure $ Enum (fromIntegral i) v
+      Just v  -> pure $ Enum sch (fromIntegral i) v
 
   Schema.Union opts            -> do
     i <- Get.getLong
-    case opts V.!? fromIntegral i of
-      Nothing -> fail $ "Decoded Avro tag is outside the expected range for a Union. Tag: " <> show i <> " union of: " <> show (V.map Schema.typeName opts)
-      Just t  -> Union (fromIntegral i) <$> getField env t
+    case Schema.ivIndexedValue opts (fromIntegral i) of
+      Nothing      -> fail $ "Decoded Avro tag is outside the expected range for a Union. Tag: " <> show i <> " union of: " <> show (Schema.extractValues opts)
+      Just (i', t) -> Union sch (fromIntegral i') <$> getField env t
 
-  Schema.Fixed _ _ size _ -> Fixed <$> getByteString (fromIntegral size)
+  Schema.Fixed _ _ size _ -> Fixed sch <$> getByteString (fromIntegral size)
 
   Schema.Array t -> do
     vals <- getBlocksOf env t
@@ -71,11 +85,9 @@ getField env sch = case sch of
 
   Schema.FreeUnion ix t -> do
     v <- getField env t
-    pure $ Union ix v
+    pure $ Union sch ix v
 
-  s -> error ("Not expected: " <> show s)
-
-getKVBlocks :: HashMap TypeName Schema -> Schema -> Get [[(Text, Value)]]
+getKVBlocks :: HashMap TypeName ReadSchema -> ReadSchema -> Get [[(Text, Value)]]
 getKVBlocks env t = do
   blockLength <- abs <$> Get.getLong
   if blockLength == 0
@@ -84,7 +96,7 @@ getKVBlocks env t = do
           (vs:) <$> getKVBlocks env t
 {-# INLINE getKVBlocks #-}
 
-getBlocksOf :: HashMap TypeName Schema -> Schema -> Get [[Value]]
+getBlocksOf :: HashMap TypeName ReadSchema -> ReadSchema -> Get [[Value]]
 getBlocksOf env t = do
   blockLength <- abs <$> Get.getLong
   if blockLength == 0
@@ -98,7 +110,7 @@ writeByPositions mv writes = foldl (>>) (return ()) (fmap (go mv) writes)
   where go :: MV.MVector s Value ->  (Int, Value) -> ST s ()
         go mv (n, v) = MV.write mv n v
 
-getRecord :: HashMap TypeName Schema -> [Field] -> Get (Vector Value)
+getRecord :: HashMap TypeName ReadSchema -> [ReadField] -> Get (Vector Value)
 getRecord env fs = do
   moos <- forM fs $ \f ->
     case Schema.fldStatus f of

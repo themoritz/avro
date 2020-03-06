@@ -3,6 +3,7 @@
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StrictData          #-}
+{-# LANGUAGE TupleSections       #-}
 module Data.Avro.Internal.Container
 where
 
@@ -16,6 +17,7 @@ import qualified Data.Binary.Get            as Get
 import           Data.ByteString            (ByteString)
 import qualified Data.ByteString.Lazy       as BL
 import qualified Data.ByteString.Lazy.Char8 as BLC
+import           Data.Either                (isRight)
 import           Data.Int                   (Int64)
 import           Data.List                  (foldl', unfoldr)
 import qualified Data.Map.Strict            as Map
@@ -122,6 +124,45 @@ getNextBlock sync decompress bs =
         (marker, _) | marker /= sync -> Left "Invalid marker, does not match sync bytes."
         (_, rest)                    -> Right rest
 
+-- | Splits container into a list of individual avro-encoded values.
+-- This version provides both encoded and decoded values.
+--
+-- This is particularly useful when slicing up containers into one or more
+-- smaller files.  By extracting the original bytestring it is possible to
+-- avoid re-encoding data.
+extractContainerValuesBytes :: forall a schema.
+     (Schema -> Either String schema)
+  -> (schema -> Get a)
+  -> BL.ByteString
+  -> Either String (Schema, [Either String (a, BL.ByteString)])
+extractContainerValuesBytes deconflict f =
+  extractContainerValues deconflict readBytes
+  where
+    readBytes sch = do
+      start <- Get.bytesRead
+      (val, end) <- Get.lookAhead (f sch >>= (\v -> (v, ) <$> Get.bytesRead))
+      res <- Get.getLazyByteString (end-start)
+      pure (val, res)
+
+extractContainerValues :: forall a schema.
+     (Schema -> Either String schema)
+  -> (schema -> Get a)
+  -> BL.ByteString
+  -> Either String (Schema, [Either String a])
+extractContainerValues deconflict f bs = do
+  (sch, blocks) <- decodeRawBlocks bs
+  readSchema <- deconflict sch
+  pure (sch, takeWhileInclusive isRight $ blocks >>= decodeBlock readSchema)
+  where
+    decodeBlock _ (Left err)               = undefined
+    decodeBlock sch (Right (nrObj, bytes)) = snd $ consumeN (fromIntegral nrObj) (decodeValue sch) bytes
+
+    decodeValue sch bytes =
+      case Get.runGetOrFail (f sch) bytes of
+        Left (bs', _, err)  -> (bs', Left err)
+        Right (bs', _, res) -> (bs', Right res)
+
+
 consumeN :: Int64 -> (a -> (a, b)) -> a -> (a, [b])
 consumeN n f a =
   if n == 0
@@ -138,3 +179,9 @@ parseCodec (Just "null")    = pure Codec.nullCodec
 parseCodec (Just "deflate") = pure Codec.deflateCodec
 parseCodec (Just x)         = error $ "Unrecognized codec: " <> BLC.unpack x
 parseCodec Nothing          = pure Codec.nullCodec
+
+takeWhileInclusive :: (a -> Bool) -> [a] -> [a]
+takeWhileInclusive _ [] = []
+takeWhileInclusive p (x:xs) =
+  x : if p x then takeWhileInclusive p xs else []
+{-# INLINE takeWhileInclusive #-}
