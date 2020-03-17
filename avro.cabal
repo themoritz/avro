@@ -245,6 +245,7 @@ test-suite test
                         Avro.DeconflictSpec
                         Avro.DefaultsSpec
                         Avro.EncodeRawSpec
+                        Avro.Encoding.ContainerSpec
                         Avro.Encoding.DeconflictSpec
                         Avro.Encoding.LogicalTypesSpec
                         Avro.JSONSpec
