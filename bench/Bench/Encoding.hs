@@ -80,10 +80,16 @@ encodeToBS = env (many 1e5 newOuter) $ \ values ->
 encodeContainer :: Benchmark
 encodeContainer = env (chunksOf 100 . Vector.toList <$> many 1e5 newOuter) $ \values ->
   bgroup "Encode container"
-    [ bench "Encode via ToAvro" $ nfIO $ Avro.encodeContainer values
-    , bench "Encode via ToEncoding" $ nfIO $ Encoding.encodeContainer nullCodec schema'Outer values
+    [ bench "Via ToAvro" $ nfIO $ Avro.encodeContainer values
+    , bench "Via ToEncoding" $ nfIO $ Encoding.encodeContainer nullCodec schema'Outer values
     ]
 
+roundtripContainer :: Benchmark
+roundtripContainer = env (chunksOf 100 . Vector.toList <$> many 1e5 newOuter) $ \values ->
+  bgroup "Roundtrip container"
+    [ bench "Via ToAvro/FromAvro" $ nfIO $ Avro.decodeContainer @Outer <$> Avro.encodeContainer values
+    , bench "Via ToEncoding/FromEncoding" $ nfIO $ Encoding.decodeContainerWithEmbeddedSchema @Outer <$> Encoding.encodeContainer nullCodec schema'Outer values
+    ]
 
 chunksOf :: Int -> [a] -> [[a]]
 chunksOf n = takeWhile (not.null) . unfoldr (Just . splitAt n)
