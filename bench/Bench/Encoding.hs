@@ -18,11 +18,15 @@ where
 
 import           Control.DeepSeq
 import           Data.Avro                     (encode)
+import qualified Data.Avro                     as Avro
+import           Data.Avro.Codec               (nullCodec)
 import           Data.Avro.Deriving            (deriveAvroFromByteString)
+import qualified Data.Avro.Encoding.Container  as Encoding
 import           Data.Avro.Encoding.ToEncoding (toEncoding)
 import           Data.ByteString               (ByteString)
 import           Data.ByteString.Builder
 import qualified Data.ByteString.Lazy          as BL
+import           Data.List                     (unfoldr)
 import qualified Data.Vector                   as Vector
 import qualified System.Random                 as Random
 import           Text.RawString.QQ
@@ -61,7 +65,7 @@ many :: Int -> IO a -> IO (Vector.Vector a)
 many = Vector.replicateM
 
 encodeToBS :: Benchmark
-encodeToBS = env (many 1e5 $ newOuter) $ \ values ->
+encodeToBS = env (many 1e5 newOuter) $ \ values ->
   bgroup "Encode to ByteString"
     [ bgroup "Simple type"
         [ bench "Encode via ToAvro"     $ nf (fmap (BL.toStrict . encode)) values
@@ -72,3 +76,14 @@ encodeToBS = env (many 1e5 $ newOuter) $ \ values ->
     --     , bench "noResolve" $ nf (fmap (deconflictNoResolve W.schema'Outer R.schema'Outer)) $ values
     --     ]
     ]
+
+encodeContainer :: Benchmark
+encodeContainer = env (chunksOf 100 . Vector.toList <$> many 1e5 newOuter) $ \values ->
+  bgroup "Encode container"
+    [ bench "Encode via ToAvro" $ nfIO $ Avro.encodeContainer values
+    , bench "Encode via ToEncoding" $ nfIO $ Encoding.encodeContainer nullCodec schema'Outer values
+    ]
+
+
+chunksOf :: Int -> [a] -> [[a]]
+chunksOf n = takeWhile (not.null) . unfoldr (Just . splitAt n)
